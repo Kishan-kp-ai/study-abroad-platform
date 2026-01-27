@@ -775,7 +775,7 @@ Want me to show you specific universities that match your profile? Just say **"r
   
   // University Recommendations
   if (lowerMessage.includes('recommend') || lowerMessage.includes('universit') || lowerMessage.includes('college') || lowerMessage.includes('school')) {
-    const countries = user.preferredCountries || ['USA'];
+    const countries = user.preferredCountries || ['United States'];
     
     return `Based on your profile, here's my curated list of universities for **${user.intendedDegree} in ${user.fieldOfStudy}**:
 
@@ -941,7 +941,7 @@ function getPersonalizedRecommendation(user, gaps) {
 function getDreamUniversities(user, countries) {
   const field = user.fieldOfStudy?.toLowerCase() || '';
   
-  if (countries.includes('USA')) {
+  if (countries.includes('United States') || countries.includes('USA')) {
     if (field.includes('computer') || field.includes('software') || field.includes('data')) {
       return `• **Stanford University** – Top 3 globally for CS, amazing Silicon Valley connections
 • **MIT** – Legendary tech programs, unmatched research opportunities
@@ -957,7 +957,7 @@ function getDreamUniversities(user, countries) {
 • **MIT** – Excellent for STEM and interdisciplinary programs`;
   }
   
-  if (countries.includes('UK')) {
+  if (countries.includes('United Kingdom') || countries.includes('UK')) {
     return `• **University of Oxford** – Historic excellence, tutorial-based learning
 • **University of Cambridge** – Research powerhouse, strong ${field} department
 • **Imperial College London** – Top for STEM, industry connections`;
@@ -977,14 +977,14 @@ function getDreamUniversities(user, countries) {
 function getTargetUniversities(user, countries) {
   const field = user.fieldOfStudy?.toLowerCase() || '';
   
-  if (countries.includes('USA')) {
+  if (countries.includes('United States') || countries.includes('USA')) {
     return `• **University of Michigan** – Excellent programs, strong funding
 • **Georgia Tech** – Top for engineering, great value
 • **UT Austin** – Strong academics, vibrant culture
 • **UCSD** – Growing reputation, beautiful campus`;
   }
   
-  if (countries.includes('UK')) {
+  if (countries.includes('United Kingdom') || countries.includes('UK')) {
     return `• **University of Edinburgh** – Beautiful city, strong programs
 • **University of Manchester** – Industry partnerships, diverse community
 • **King's College London** – Central London, excellent networking`;
@@ -1002,7 +1002,7 @@ function getTargetUniversities(user, countries) {
 }
 
 function getSafeUniversities(user, countries) {
-  if (countries.includes('USA')) {
+  if (countries.includes('United States') || countries.includes('USA')) {
     return `• **Arizona State University** – Innovative programs, high acceptance
 • **University of South Florida** – Good funding, growing reputation
 • **Northeastern University** – Excellent co-op program`;
@@ -1374,9 +1374,9 @@ function getFallbackOnboardingResponse(message, history, collectedData = {}) {
   if (!hasCountries) {
     const countries = [];
     const countryMap = {
-      'usa': 'USA', 'us': 'USA', 'america': 'USA', 'united states': 'USA', 'states': 'USA',
+      'usa': 'United States', 'us': 'United States', 'america': 'United States', 'united states': 'United States', 'states': 'United States',
       'canada': 'Canada', 'canadian': 'Canada',
-      'uk': 'UK', 'britain': 'UK', 'england': 'UK', 'united kingdom': 'UK', 'london': 'UK',
+      'uk': 'United Kingdom', 'britain': 'United Kingdom', 'england': 'United Kingdom', 'united kingdom': 'United Kingdom', 'london': 'United Kingdom',
       'germany': 'Germany', 'german': 'Germany', 'berlin': 'Germany',
       'australia': 'Australia', 'aussie': 'Australia', 'sydney': 'Australia', 'melbourne': 'Australia',
       'singapore': 'Singapore',
@@ -1393,7 +1393,7 @@ function getFallbackOnboardingResponse(message, history, collectedData = {}) {
     }
     
     if (countries.length === 0) {
-      countries.push('USA'); // Default
+      countries.push('United States'); // Default
     }
 
     return {

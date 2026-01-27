@@ -5,6 +5,7 @@ import {
   FiHome, 
   FiMessageCircle, 
   FiBook, 
+  FiGlobe,
   FiFileText, 
   FiUser, 
   FiLogOut 
@@ -24,6 +25,7 @@ const Layout = ({ children }) => {
     { to: '/dashboard', icon: FiHome, label: 'Dashboard' },
     { to: '/counsellor', icon: FiMessageCircle, label: 'AI Counsellor' },
     { to: '/universities', icon: FiBook, label: 'Universities' },
+    { to: '/live-universities', icon: FiGlobe, label: 'Live Search' },
     { to: '/application', icon: FiFileText, label: 'Application' },
     { to: '/profile', icon: FiUser, label: 'Profile' },
   ];

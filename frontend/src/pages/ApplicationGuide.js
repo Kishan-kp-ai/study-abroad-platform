@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import liveUniversityApi from '../services/liveUniversityApi';
 import { toast } from 'react-hot-toast';
 import { 
   FiCheckCircle, 
@@ -21,10 +22,21 @@ const ApplicationGuide = () => {
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTask, setNewTask] = useState({ title: '', priority: 'medium', category: 'general' });
   const [filter, setFilter] = useState('all');
+  const [liveLockedUniversities, setLiveLockedUniversities] = useState([]);
 
   useEffect(() => {
     loadTasks();
+    loadLiveSelections();
   }, []);
+
+  const loadLiveSelections = async () => {
+    try {
+      const data = await liveUniversityApi.getMySelections();
+      setLiveLockedUniversities(data.locked || []);
+    } catch (error) {
+      console.error('Error loading live selections:', error);
+    }
+  };
 
   const loadTasks = async () => {
     try {
@@ -75,7 +87,21 @@ const ApplicationGuide = () => {
     }
   };
 
-  const hasLockedUniversities = user?.lockedUniversities?.length > 0;
+  const hasLockedUniversities = (user?.lockedUniversities?.length > 0) || (liveLockedUniversities.length > 0);
+  const allLockedUniversities = [
+    ...(user?.lockedUniversities || []).map(u => ({
+      id: u.universityId?._id || u.universityId,
+      name: u.universityId?.name || u.universityName || 'Unknown',
+      country: u.universityId?.country || u.country || '',
+      source: 'recommended'
+    })),
+    ...liveLockedUniversities.map(u => ({
+      id: u.universityId,
+      name: u.universityName,
+      country: u.country,
+      source: 'live'
+    }))
+  ];
 
   const filteredTasks = tasks.filter(task => {
     if (filter === 'all') return true;
@@ -301,12 +327,14 @@ const ApplicationGuide = () => {
 
       {/* Locked Universities */}
       <div className="locked-universities-section">
-        <h2>Locked Universities</h2>
+        <h2>Locked Universities ({allLockedUniversities.length})</h2>
         <div className="locked-list">
-          {user?.lockedUniversities?.map((item, index) => (
+          {allLockedUniversities.map((item, index) => (
             <div key={index} className="locked-item">
               <FiLock />
-              <span>{item.universityId?.name || 'University'}</span>
+              <span>{item.name}</span>
+              {item.country && <span className="locked-country">({item.country})</span>}
+              {item.source === 'live' && <span className="live-badge">Live</span>}
             </div>
           ))}
         </div>

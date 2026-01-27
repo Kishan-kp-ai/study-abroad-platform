@@ -78,6 +78,25 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// Delete all tasks for a university (used when unlocking)
+router.delete('/university/:universityId', authMiddleware, async (req, res) => {
+  try {
+    const { universityId } = req.params;
+    
+    const result = await Task.deleteMany({ 
+      userId: req.userId, 
+      universityId: universityId 
+    });
+    
+    res.json({ 
+      message: 'Tasks deleted', 
+      deletedCount: result.deletedCount 
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // Generate application tasks for locked university
 router.post('/generate/:universityId', authMiddleware, async (req, res) => {
   try {

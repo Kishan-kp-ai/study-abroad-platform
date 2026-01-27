@@ -10,6 +10,7 @@ import Onboarding from './pages/Onboarding';
 import Dashboard from './pages/Dashboard';
 import AICounsellor from './pages/AICounsellor';
 import Universities from './pages/Universities';
+import LiveUniversities from './pages/LiveUniversities';
 import ApplicationGuide from './pages/ApplicationGuide';
 import Profile from './pages/Profile';
 
@@ -61,6 +62,11 @@ function App() {
       <Route path="/universities" element={
         <ProtectedRoute requireOnboarding>
           <Layout><Universities /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/live-universities" element={
+        <ProtectedRoute requireOnboarding>
+          <Layout><LiveUniversities /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/application" element={

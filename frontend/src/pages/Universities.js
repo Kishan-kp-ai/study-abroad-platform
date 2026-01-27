@@ -291,8 +291,9 @@ const Universities = () => {
           'Are you sure you want to unlock this university? Your application tasks for this university will be removed.'
         );
         if (confirmed) {
+          await api.delete(`/tasks/university/${universityId}`);
           await api.delete(`/user/lock/${universityId}`);
-          toast.success('University unlocked');
+          toast.success('University unlocked and tasks removed');
         }
       } else {
         await api.post(`/user/lock/${universityId}`);
@@ -419,13 +420,27 @@ const Universities = () => {
           />
         </div>
 
-        {/* Program Tags */}
+        {/* Program Tags - Show available degree levels */}
         <div className="program-tags">
-          {uni.programs?.slice(0, 2).map((prog, i) => (
-            <span key={i} className="program-tag">
-              {prog.degree} - {prog.field}
+          {(() => {
+            const degrees = [...new Set(uni.programs?.map(p => p.degree) || [])];
+            const degreeLabels = {
+              'bachelors': "Bachelor's",
+              'masters': "Master's",
+              'mba': 'MBA',
+              'phd': 'PhD'
+            };
+            return degrees.slice(0, 4).map((degree, i) => (
+              <span key={i} className={`program-tag ${degree}`}>
+                {degreeLabels[degree] || degree}
+              </span>
+            ));
+          })()}
+          {uni.programs?.length > 0 && (
+            <span className="program-count">
+              {uni.programs.length} programs
             </span>
-          ))}
+          )}
         </div>
 
         {item.reasons && (

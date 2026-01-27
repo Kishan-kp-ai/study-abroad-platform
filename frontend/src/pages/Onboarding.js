@@ -383,7 +383,7 @@ const Onboarding = () => {
         intendedDegree: data.intendedDegree || 'masters',
         fieldOfStudy: data.fieldOfStudy || data.major || 'Not specified',
         targetIntakeYear: data.targetIntakeYear || new Date().getFullYear() + 1,
-        preferredCountries: data.preferredCountries || ['USA'],
+        preferredCountries: data.preferredCountries || ['United States'],
         budgetMin: data.budgetMin || 20000,
         budgetMax: data.budgetMax || 50000,
         fundingPlan: data.fundingPlan || 'mixed',

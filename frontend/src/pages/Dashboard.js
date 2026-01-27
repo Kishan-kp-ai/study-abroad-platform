@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import liveUniversityApi from '../services/liveUniversityApi';
 import { 
   FiMessageCircle, 
   FiBook, 
@@ -19,16 +20,19 @@ const Dashboard = () => {
   const [profileStrength, setProfileStrength] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [liveSelections, setLiveSelections] = useState({ shortlisted: [], locked: [] });
 
   const loadDashboardData = useCallback(async () => {
     try {
-      const [strengthRes, tasksRes] = await Promise.all([
+      const [strengthRes, tasksRes, liveSelectionsRes] = await Promise.all([
         api.get('/user/profile-strength'),
         api.get('/tasks'),
+        liveUniversityApi.getMySelections(),
         refreshProfile()
       ]);
       setProfileStrength(strengthRes.data);
       setTasks(tasksRes.data);
+      setLiveSelections(liveSelectionsRes);
     } catch (error) {
       console.error('Error loading dashboard:', error);
     } finally {
@@ -246,15 +250,15 @@ const Dashboard = () => {
           <h3>Universities</h3>
           <div className="uni-stats">
             <div className="uni-stat">
-              <span className="stat-number">{user?.shortlistedUniversities?.length || 0}</span>
+              <span className="stat-number">{(user?.shortlistedUniversities?.length || 0) + (liveSelections.shortlisted?.length || 0)}</span>
               <span className="stat-label">Shortlisted</span>
             </div>
             <div className="uni-stat">
-              <span className="stat-number">{user?.lockedUniversities?.length || 0}</span>
+              <span className="stat-number">{(user?.lockedUniversities?.length || 0) + (liveSelections.locked?.length || 0)}</span>
               <span className="stat-label">Locked</span>
             </div>
           </div>
-          {user?.lockedUniversities?.length === 0 && (
+          {(user?.lockedUniversities?.length || 0) + (liveSelections.locked?.length || 0) === 0 && (
             <div className="uni-alert">
               <FiAlertCircle />
               <span>Lock at least one university to start application guidance</span>

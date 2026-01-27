@@ -2,6 +2,7 @@ const express = require('express');
 const University = require('../models/University');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth');
+const { fetchRealUniversities } = require('../services/universityApi');
 const router = express.Router();
 
 // Get all universities with optional filters
@@ -437,6 +438,78 @@ router.post('/seed', async (req, res) => {
     await University.insertMany(universities);
     
     res.json({ message: 'Universities seeded successfully', count: universities.length });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Sync universities from external API (real data)
+router.post('/sync-from-api', async (req, res) => {
+  try {
+    const { countries, clearExisting } = req.body;
+    
+    // Optional: clear existing universities
+    if (clearExisting) {
+      await University.deleteMany({});
+      console.log('Cleared existing universities');
+    }
+    
+    // Default countries to fetch
+    const countriesToFetch = countries || [
+      'United States', 
+      'United Kingdom', 
+      'Canada', 
+      'Germany', 
+      'Australia',
+      'Singapore',
+      'Ireland',
+      'Netherlands'
+    ];
+    
+    console.log('Fetching universities from API...');
+    const universities = await fetchRealUniversities(countriesToFetch);
+    
+    // Insert in batches to avoid memory issues
+    const batchSize = 50;
+    let inserted = 0;
+    
+    for (let i = 0; i < universities.length; i += batchSize) {
+      const batch = universities.slice(i, i + batchSize);
+      await University.insertMany(batch, { ordered: false }).catch(err => {
+        // Ignore duplicate key errors
+        if (err.code !== 11000) throw err;
+      });
+      inserted += batch.length;
+    }
+    
+    console.log(`Synced ${inserted} universities from API`);
+    res.json({ 
+      message: 'Universities synced from API', 
+      count: inserted,
+      countries: countriesToFetch
+    });
+  } catch (error) {
+    console.error('Sync error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Search universities by name (for autocomplete)
+router.get('/search', authMiddleware, async (req, res) => {
+  try {
+    const { q, limit = 10 } = req.query;
+    
+    if (!q || q.length < 2) {
+      return res.json([]);
+    }
+    
+    const universities = await University.find({
+      name: { $regex: q, $options: 'i' }
+    })
+    .limit(parseInt(limit))
+    .select('name country city ranking tuitionFee');
+    
+    res.json(universities);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

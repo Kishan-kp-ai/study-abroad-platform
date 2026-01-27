@@ -52,6 +52,23 @@ const userSchema = new mongoose.Schema({
     universityId: { type: mongoose.Schema.Types.ObjectId, ref: 'University' },
     lockedAt: { type: Date, default: Date.now }
   }],
+
+  // Live Universities Shortlisted (from live API)
+  liveShortlistedUniversities: [{
+    universityId: { type: String },
+    universityName: { type: String },
+    country: { type: String },
+    category: { type: String, enum: ['dream', 'target', 'safe'], default: 'target' },
+    shortlistedAt: { type: Date, default: Date.now }
+  }],
+
+  // Live Universities Locked (from live API)
+  liveLockedUniversities: [{
+    universityId: { type: String },
+    universityName: { type: String },
+    country: { type: String },
+    lockedAt: { type: Date, default: Date.now }
+  }],
   
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

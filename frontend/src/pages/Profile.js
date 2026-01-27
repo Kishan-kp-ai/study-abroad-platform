@@ -34,7 +34,7 @@ const Profile = () => {
     sopStatus: user?.sopStatus || 'not-started'
   });
 
-  const countries = ['USA', 'Canada', 'UK', 'Australia', 'Germany', 'Switzerland', 'Singapore', 'Netherlands'];
+  const countries = ['United States', 'Canada', 'United Kingdom', 'Australia', 'Germany', 'Switzerland', 'Singapore', 'Netherlands', 'Ireland'];
 
   const handleChange = (e) => {
     const { name, value } = e.target;
