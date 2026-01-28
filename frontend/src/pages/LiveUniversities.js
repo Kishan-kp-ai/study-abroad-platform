@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo, createContext, useContext } from 'react';
 import liveUniversityApi from '../services/liveUniversityApi';
+import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { 
   FiSearch, 
@@ -24,7 +25,8 @@ import {
   FiHeart,
   FiLock,
   FiUnlock,
-  FiInfo
+  FiInfo,
+  FiUser
 } from 'react-icons/fi';
 import './LiveUniversities.css';
 
@@ -290,6 +292,7 @@ const getAcceptanceLikelihood = (uni) => {
 };
 
 const LiveUniversities = () => {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('');
   const [universities, setUniversities] = useState([]);
@@ -299,6 +302,7 @@ const LiveUniversities = () => {
   const [selectedUniversity, setSelectedUniversity] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [profileMatchEnabled, setProfileMatchEnabled] = useState(false);
   
   const [filters, setFilters] = useState({
     degreeLevel: '',
@@ -434,11 +438,59 @@ const LiveUniversities = () => {
     });
   };
 
-  const activeFilterCount = Object.values(filters).filter(v => v !== '').length;
+  const activeFilterCount = Object.values(filters).filter(v => v !== '').length + (profileMatchEnabled ? 1 : 0);
+
+  const hasProfileData = user && (
+    (user.budgetMax && user.budgetMax > 0) ||
+    user.intendedDegree ||
+    user.fieldOfStudy
+  );
 
   const filteredUniversities = useMemo(() => {
     return universities.filter((uni) => {
       const assignedProgram = getUniversityProgram(uni);
+
+      // Profile match filter - apply strict filtering
+      if (profileMatchEnabled && user) {
+        let checksApplied = 0;
+
+        // Budget filter
+        if (user.budgetMax && user.budgetMax > 0) {
+          checksApplied++;
+          const totalCost = (uni.tuitionFee || 0) + (uni.livingCostPerYear || 0);
+          if (totalCost > user.budgetMax) {
+            return false;
+          }
+        }
+
+        // Degree level filter
+        if (user.intendedDegree) {
+          checksApplied++;
+          const degreeMap = {
+            "Bachelor's": 'bachelors',
+            "Master's": 'masters',
+            'MBA': 'mba',
+            'PhD': 'phd'
+          };
+          const userDegree = degreeMap[user.intendedDegree] || user.intendedDegree?.toLowerCase();
+          if (assignedProgram.degree !== userDegree) return false;
+        }
+
+        // Field of study filter
+        if (user.fieldOfStudy) {
+          checksApplied++;
+          const userField = (user.fieldOfStudy || '').toLowerCase();
+          const uniField = (assignedProgram.field || '').toLowerCase();
+          const fieldMatch = uniField.includes(userField) || 
+                            userField.includes(uniField) ||
+                            uniField.split(' ').some(word => word.length > 2 && userField.includes(word)) ||
+                            userField.split(' ').some(word => word.length > 2 && uniField.includes(word));
+          if (!fieldMatch) return false;
+        }
+
+        // If no checks were applied, show all
+        if (checksApplied === 0) return true;
+      }
       
       if (filters.degreeLevel) {
         if (assignedProgram.degree !== filters.degreeLevel) return false;
@@ -488,7 +540,7 @@ const LiveUniversities = () => {
 
       return true;
     });
-  }, [universities, filters]);
+  }, [universities, filters, profileMatchEnabled, user]);
 
   const handleSearch = useCallback(async (query) => {
     if (query.length < 2) {
@@ -658,14 +710,42 @@ const LiveUniversities = () => {
           )}
           {showFilters ? <FiChevronUp /> : <FiChevronDown />}
         </button>
+
+        {/* Profile Match Toggle - Always Visible */}
+        <button 
+          className={`profile-match-btn ${profileMatchEnabled ? 'active' : ''}`}
+          onClick={() => setProfileMatchEnabled(!profileMatchEnabled)}
+        >
+          <FiUser />
+          {profileMatchEnabled ? 'Profile Match ON' : 'Profile Match'}
+        </button>
       </div>
+
+      {/* Profile Match Info Bar */}
+      {profileMatchEnabled && (
+        <div className={`profile-match-bar ${!hasProfileData ? 'warning' : ''}`}>
+          <FiUser />
+          <span>
+            {hasProfileData ? (
+              <>Filtering by: {[
+                user?.budgetMax && `Budget ≤$${user.budgetMax.toLocaleString()}`,
+                user?.intendedDegree && `Degree (${user.intendedDegree})`,
+                user?.fieldOfStudy && `Field (${user.fieldOfStudy})`
+              ].filter(Boolean).join(' • ')}</>
+            ) : (
+              <>⚠️ No profile data found. Please complete your profile in Settings to use this filter.</>
+            )}
+          </span>
+          <button onClick={() => setProfileMatchEnabled(false)}><FiX /></button>
+        </div>
+      )}
 
       {showFilters && (
         <div className="filters-panel">
           <div className="filters-header">
             <h3><FiFilter /> Filters</h3>
             {activeFilterCount > 0 && (
-              <button className="clear-filters-btn" onClick={clearFilters}>
+              <button className="clear-filters-btn" onClick={() => { clearFilters(); setProfileMatchEnabled(false); }}>
                 <FiX /> Clear All
               </button>
             )}
