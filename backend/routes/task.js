@@ -8,7 +8,6 @@ const router = express.Router();
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const tasks = await Task.find({ userId: req.userId })
-      .populate('universityId')
       .sort({ priority: -1, createdAt: -1 });
     res.json(tasks);
   } catch (error) {

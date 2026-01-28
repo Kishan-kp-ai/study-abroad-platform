@@ -4,8 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { 
   FiHome, 
   FiMessageCircle, 
-  FiBook, 
   FiGlobe,
+  FiHeart,
   FiFileText, 
   FiUser, 
   FiLogOut 
@@ -18,14 +18,14 @@ const Layout = ({ children }) => {
 
   const handleLogout = () => {
     logout();
-    navigate('/');
+    navigate('/', { replace: true });
   };
 
   const navItems = [
     { to: '/dashboard', icon: FiHome, label: 'Dashboard' },
     { to: '/counsellor', icon: FiMessageCircle, label: 'AI Counsellor' },
-    { to: '/universities', icon: FiBook, label: 'Universities' },
     { to: '/live-universities', icon: FiGlobe, label: 'Live Search' },
+    { to: '/shortlisted', icon: FiHeart, label: 'Shortlisted' },
     { to: '/application', icon: FiFileText, label: 'Application' },
     { to: '/profile', icon: FiUser, label: 'Profile' },
   ];

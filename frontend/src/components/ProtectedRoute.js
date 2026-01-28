@@ -19,7 +19,7 @@ const ProtectedRoute = ({ children, requireOnboarding = false }) => {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   // If onboarding is required but not completed, redirect to onboarding

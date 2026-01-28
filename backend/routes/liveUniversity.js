@@ -322,9 +322,36 @@ router.post('/lock', authMiddleware, async (req, res) => {
     
     await user.save();
     
+    // Auto-generate application tasks for the locked university
+    const Task = require('../models/Task');
+    const existingTasks = await Task.find({ userId: req.userId, universityId });
+    
+    let createdTasks = [];
+    if (existingTasks.length === 0) {
+      const applicationTasks = [
+        { title: `Prepare SOP for ${universityName}`, category: 'document', priority: 'high' },
+        { title: `Gather transcripts for ${universityName}`, category: 'document', priority: 'high' },
+        { title: `Get recommendation letters for ${universityName}`, category: 'document', priority: 'high' },
+        { title: `Complete application form for ${universityName}`, category: 'application', priority: 'high' },
+        { title: `Pay application fee for ${universityName}`, category: 'application', priority: 'medium' },
+        { title: `Prepare financial documents for ${universityName}`, category: 'document', priority: 'medium' }
+      ];
+      
+      createdTasks = await Task.insertMany(
+        applicationTasks.map(t => ({
+          ...t,
+          userId: req.userId,
+          universityId,
+          universityName,
+          aiGenerated: true
+        }))
+      );
+    }
+    
     res.json({ 
       message: 'University locked', 
-      liveLockedUniversities: user.liveLockedUniversities 
+      liveLockedUniversities: user.liveLockedUniversities,
+      tasksCreated: createdTasks.length
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -348,9 +375,17 @@ router.delete('/lock/:universityId', authMiddleware, async (req, res) => {
     
     await user.save();
     
+    // Also delete any tasks associated with this university
+    const Task = require('../models/Task');
+    const deletedTasks = await Task.deleteMany({ 
+      userId: req.userId, 
+      universityId: universityId 
+    });
+    
     res.json({ 
       message: 'University unlocked', 
-      liveLockedUniversities: user.liveLockedUniversities 
+      liveLockedUniversities: user.liveLockedUniversities,
+      tasksDeleted: deletedTasks.deletedCount
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });

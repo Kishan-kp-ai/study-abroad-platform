@@ -11,12 +11,13 @@ import {
   FiAlertCircle,
   FiPlus,
   FiTrash2,
-  FiLock
+  FiLock,
+  FiUnlock
 } from 'react-icons/fi';
 import './ApplicationGuide.css';
 
 const ApplicationGuide = () => {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddTask, setShowAddTask] = useState(false);
@@ -87,6 +88,22 @@ const ApplicationGuide = () => {
     }
   };
 
+  const unlockUniversity = async (uni) => {
+    try {
+      if (uni.source === 'live') {
+        await liveUniversityApi.unlockUniversity(uni.id);
+        setLiveLockedUniversities(prev => prev.filter(u => u.universityId !== uni.id));
+      } else {
+        await api.delete(`/user/lock/${uni.id}`);
+        await refreshProfile();
+      }
+      toast.success(`Unlocked ${uni.name}`);
+    } catch (error) {
+      console.error('Error unlocking:', error);
+      toast.error('Failed to unlock university');
+    }
+  };
+
   const hasLockedUniversities = (user?.lockedUniversities?.length > 0) || (liveLockedUniversities.length > 0);
   const allLockedUniversities = [
     ...(user?.lockedUniversities || []).map(u => ({
@@ -110,12 +127,16 @@ const ApplicationGuide = () => {
     return task.category === filter;
   });
 
-  const tasksByCategory = {
-    document: filteredTasks.filter(t => t.category === 'document'),
-    exam: filteredTasks.filter(t => t.category === 'exam'),
-    application: filteredTasks.filter(t => t.category === 'application'),
-    general: filteredTasks.filter(t => t.category === 'general' || !t.category)
-  };
+  // Group tasks by university
+  const tasksByUniversity = filteredTasks.reduce((acc, task) => {
+    const uniId = task.universityId || 'general';
+    const uniName = task.universityName || 'General Tasks';
+    if (!acc[uniId]) {
+      acc[uniId] = { name: uniName, tasks: [] };
+    }
+    acc[uniId].tasks.push(task);
+    return acc;
+  }, {});
 
   const stats = {
     total: tasks.length,
@@ -144,7 +165,7 @@ const ApplicationGuide = () => {
             Locking a university shows your commitment and unlocks personalized 
             application tasks and timelines.
           </p>
-          <Link to="/universities" className="btn btn-primary">
+          <Link to="/live-universities" className="btn btn-primary">
             Go to Universities
           </Link>
         </div>
@@ -286,39 +307,51 @@ const ApplicationGuide = () => {
         </div>
       )}
 
-      {/* Tasks List */}
+      {/* Tasks List - Grouped by University */}
       <div className="tasks-container">
         {filteredTasks.length === 0 ? (
           <div className="empty-state">
             <p>No tasks found. Add a task or talk to the AI Counsellor to generate tasks.</p>
           </div>
         ) : (
-          <div className="tasks-list">
-            {filteredTasks.map(task => (
-              <div 
-                key={task._id} 
-                className={`task-card ${task.completed ? 'completed' : ''} ${task.priority}`}
-              >
-                <button className="task-check" onClick={() => toggleTask(task._id)}>
-                  {task.completed ? <FiCheckCircle /> : <FiCircle />}
-                </button>
-                <div className="task-content">
-                  <span className="task-title">{task.title}</span>
-                  <div className="task-meta">
-                    <span className={`priority-badge ${task.priority}`}>
-                      {task.priority}
-                    </span>
-                    <span className="category-badge">
-                      {task.category || 'general'}
-                    </span>
-                    {task.aiGenerated && (
-                      <span className="ai-badge">AI Generated</span>
-                    )}
-                  </div>
+          <div className="tasks-by-university">
+            {Object.entries(tasksByUniversity).map(([uniId, { name, tasks: uniTasks }]) => (
+              <div key={uniId} className="university-task-group">
+                <div className="university-group-header">
+                  <h3>{name}</h3>
+                  <span className="task-count">
+                    {uniTasks.filter(t => t.completed).length}/{uniTasks.length} completed
+                  </span>
                 </div>
-                <button className="task-delete" onClick={() => deleteTask(task._id)}>
-                  <FiTrash2 />
-                </button>
+                <div className="tasks-list">
+                  {uniTasks.map(task => (
+                    <div 
+                      key={task._id} 
+                      className={`task-card ${task.completed ? 'completed' : ''} ${task.priority}`}
+                    >
+                      <button className="task-check" onClick={() => toggleTask(task._id)}>
+                        {task.completed ? <FiCheckCircle /> : <FiCircle />}
+                      </button>
+                      <div className="task-content">
+                        <span className="task-title">{task.title}</span>
+                        <div className="task-meta">
+                          <span className={`priority-badge ${task.priority}`}>
+                            {task.priority}
+                          </span>
+                          <span className="category-badge">
+                            {task.category || 'general'}
+                          </span>
+                          {task.aiGenerated && (
+                            <span className="ai-badge">AI Generated</span>
+                          )}
+                        </div>
+                      </div>
+                      <button className="task-delete" onClick={() => deleteTask(task._id)}>
+                        <FiTrash2 />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -331,10 +364,19 @@ const ApplicationGuide = () => {
         <div className="locked-list">
           {allLockedUniversities.map((item, index) => (
             <div key={index} className="locked-item">
-              <FiLock />
-              <span>{item.name}</span>
-              {item.country && <span className="locked-country">({item.country})</span>}
+              <FiLock className="lock-icon" />
+              <div className="locked-info">
+                <span className="locked-name">{item.name}</span>
+                {item.country && <span className="locked-country">{item.country}</span>}
+              </div>
               {item.source === 'live' && <span className="live-badge">Live</span>}
+              <button 
+                className="unlock-btn"
+                onClick={() => unlockUniversity(item)}
+                title="Unlock university"
+              >
+                <FiUnlock /> Unlock
+              </button>
             </div>
           ))}
         </div>

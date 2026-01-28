@@ -9,8 +9,9 @@ import Signup from './pages/Signup';
 import Onboarding from './pages/Onboarding';
 import Dashboard from './pages/Dashboard';
 import AICounsellor from './pages/AICounsellor';
-import Universities from './pages/Universities';
+
 import LiveUniversities from './pages/LiveUniversities';
+import Shortlisted from './pages/Shortlisted';
 import ApplicationGuide from './pages/ApplicationGuide';
 import Profile from './pages/Profile';
 
@@ -59,14 +60,15 @@ function App() {
           <Layout><AICounsellor /></Layout>
         </ProtectedRoute>
       } />
-      <Route path="/universities" element={
-        <ProtectedRoute requireOnboarding>
-          <Layout><Universities /></Layout>
-        </ProtectedRoute>
-      } />
+
       <Route path="/live-universities" element={
         <ProtectedRoute requireOnboarding>
           <Layout><LiveUniversities /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/shortlisted" element={
+        <ProtectedRoute requireOnboarding>
+          <Layout><Shortlisted /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/application" element={

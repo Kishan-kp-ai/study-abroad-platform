@@ -5,6 +5,7 @@ const University = require('../models/University');
 const Task = require('../models/Task');
 const ChatHistory = require('../models/ChatHistory');
 const authMiddleware = require('../middleware/auth');
+const { searchUniversities: searchLiveUniversities, generateId } = require('../services/liveUniversityApi');
 const router = express.Router();
 
 // Process user actions (shortlist, lock, create tasks)
@@ -14,118 +15,219 @@ async function processUserActions(message, user, universities) {
   let actionResponse = null;
   const firstName = user.fullName?.split(' ')[0] || 'there';
   
-  // Detect shortlist intent
-  if (lowerMessage.includes('shortlist') || lowerMessage.includes('add to my list') || lowerMessage.includes('save university')) {
-    // Try to find university name in message
-    const uni = findUniversityInMessage(message, universities);
+  // Initialize live university arrays if not present
+  if (!user.liveShortlistedUniversities) user.liveShortlistedUniversities = [];
+  if (!user.liveLockedUniversities) user.liveLockedUniversities = [];
+  
+  // Detect shortlist intent - but NOT "show my shortlist" or "view shortlist" requests
+  const isShowShortlistRequest = (lowerMessage.includes('show') && lowerMessage.includes('shortlist')) ||
+                                  lowerMessage.includes('my shortlist') ||
+                                  lowerMessage.includes('view shortlist') ||
+                                  lowerMessage.includes('see shortlist');
+  
+  if (!isShowShortlistRequest && (lowerMessage.includes('shortlist') || lowerMessage.includes('add to my list') || lowerMessage.includes('save university'))) {
+    console.log('Shortlist intent detected. Message:', message);
     
-    if (uni && uni._id) {
-      // Determine category
-      let category = 'target';
-      if (lowerMessage.includes('dream')) category = 'dream';
-      else if (lowerMessage.includes('safe')) category = 'safe';
-      else if (lowerMessage.includes('target')) category = 'target';
+    // Try to find university - first in local DB, then search live API
+    let uni = findUniversityInMessage(message, universities);
+    let isLiveUni = false;
+    
+    console.log('Found in local DB:', uni ? uni.name : 'None');
+    
+    // If not found in local DB, search live universities
+    if (!uni || !uni._id) {
+      const searchQuery = extractUniversityName(message);
+      console.log('Extracted search query:', searchQuery);
       
-      // Check if already shortlisted
-      const alreadyShortlisted = user.shortlistedUniversities.find(
-        s => s.universityId && uni._id && s.universityId.toString() === uni._id.toString()
-      );
-      
-      if (alreadyShortlisted) {
-        actionResponse = `**${uni.name}** is already on your shortlist as a **${alreadyShortlisted.category}** school! 
+      if (searchQuery) {
+        try {
+          console.log('Searching live universities for:', searchQuery);
+          const liveResults = await searchLiveUniversities(searchQuery);
+          console.log('Live results count:', liveResults?.length || 0);
+          
+          if (liveResults && liveResults.length > 0) {
+            // Find best match
+            const lowerQuery = searchQuery.toLowerCase();
+            uni = liveResults.find(u => u.name.toLowerCase().includes(lowerQuery)) || liveResults[0];
+            isLiveUni = true;
+            console.log('Selected university:', uni.name);
+          }
+        } catch (err) {
+          console.error('Error searching live universities:', err.message);
+        }
+      }
+    }
+    
+    console.log('After search, uni found:', uni ? uni.name : 'None');
+    
+    if (uni) {
+      try {
+        // Determine category
+        let category = 'target';
+        if (lowerMessage.includes('dream')) category = 'dream';
+        else if (lowerMessage.includes('safe')) category = 'safe';
+        else if (lowerMessage.includes('target')) category = 'target';
+        
+        console.log('Shortlisting', uni.name, 'as', category);
+        
+        const universityId = isLiveUni ? uni.id : (uni._id ? uni._id.toString() : generateId(uni.name, uni.country));
+        
+        // Check if already shortlisted (check both old and live arrays)
+        const alreadyShortlistedOld = user.shortlistedUniversities?.find(
+          s => s.universityId && uni._id && s.universityId.toString() === uni._id.toString()
+        );
+        const alreadyShortlistedLive = user.liveShortlistedUniversities?.find(
+          s => s.universityId === universityId
+        );
+        
+        if (alreadyShortlistedOld || alreadyShortlistedLive) {
+          const existingCategory = alreadyShortlistedOld?.category || alreadyShortlistedLive?.category;
+          actionResponse = `**${uni.name}** is already on your shortlist as a **${existingCategory}** school! 
 
 Would you like me to change its category, or would you like to explore other universities?`;
-      } else {
-        // Add to shortlist
-        user.shortlistedUniversities.push({ 
-          universityId: uni._id, 
-          category: category,
-          addedAt: new Date()
-        });
-        await user.save();
-        
-        actions.push({ type: 'shortlist', universityName: uni.name, category });
-        
-        actionResponse = `Done! I've added **${uni.name}** to your shortlist as a **${category.toUpperCase()}** school! 🎉
+        } else {
+          // Add to live shortlist
+          user.liveShortlistedUniversities.push({ 
+            universityId: universityId,
+            universityName: uni.name,
+            country: uni.country,
+            category: category,
+            shortlistedAt: new Date()
+          });
+          await user.save();
+          console.log('User saved successfully, shortlist count:', user.liveShortlistedUniversities.length);
+          
+          actions.push({ type: 'shortlist', universityName: uni.name, category });
+          
+          const totalShortlisted = (user.shortlistedUniversities?.length || 0) + user.liveShortlistedUniversities.length;
+          const totalLocked = (user.lockedUniversities?.length || 0) + (user.liveLockedUniversities?.length || 0);
+          
+          actionResponse = `✅ **${uni.name} has been shortlisted!**
 
-**Why ${uni.name} is a good ${category} choice for you:**
-${getUniversityFitExplanation(uni, user, category)}
+I've added it to your list as a **${category.toUpperCase()}** school.
 
-**Your shortlist now has ${user.shortlistedUniversities.length} universities.**
+**📍 University Details:**
+• Country: ${uni.country}
+• Category: ${category.charAt(0).toUpperCase() + category.slice(1)}
 
-${user.shortlistedUniversities.length >= 3 && user.lockedUniversities.length === 0 
-  ? `\n**Next step:** You have enough universities shortlisted. Would you like to **lock** one to start your application planning? Just say "lock ${uni.name}" or name another university.` 
-  : `\nWould you like me to recommend more universities, or tell you about another school?`}`;
+**Your shortlist now has ${totalShortlisted} universities.**
+
+${totalShortlisted >= 3 && totalLocked === 0 
+  ? `\n**Next step:** Ready to commit? Say **"Lock ${uni.name}"** to start your application planning!` 
+  : `\nWant to add more? Just say **"Shortlist [university name]"**`}`;
+        }
+      } catch (saveError) {
+        console.error('Error saving shortlist:', saveError);
+        actionResponse = `I found **${uni.name}** but had trouble saving it to your shortlist. Please try again!`;
       }
-    } else if (uni && !uni._id) {
-      // University recognized but not in database
-      actionResponse = `I recognize **${uni.name}** - that's an excellent choice! 
-
-However, I don't have this university in my database yet. Here's what you can do:
-
-1. Go to the **Universities** tab and search for it
-2. Or ask me to recommend similar universities in that region
-
-**In the meantime, here are some great alternatives:**
-${getTopRecommendations(user, universities, 3).map((u, i) => `${i + 1}. **${u.name}** (${u.country})`).join('\n')}
-
-Would you like me to shortlist any of these instead?`;
     } else {
-      // No university found, suggest some
-      const recommendations = getTopRecommendations(user, universities, 3);
-      actionResponse = `I'd be happy to shortlist a university for you! Which one would you like to add?
+      // No university found - try one more time with a broader search
+      const searchQuery = extractUniversityName(message);
+      console.log('No uni found, trying broader search with:', searchQuery);
+      
+      if (searchQuery && searchQuery.length >= 2) {
+        try {
+          const liveResults = await searchLiveUniversities(searchQuery);
+          console.log('Broader search results:', liveResults?.length || 0);
+          
+          if (liveResults && liveResults.length > 0) {
+            // Show suggestions
+            const topResults = liveResults.slice(0, 5);
+            actionResponse = `I found some universities matching "${searchQuery}". Did you mean one of these?
 
-**Here are my top recommendations for you:**
-${recommendations.map((u, i) => `${i + 1}. **${u.name}** (${u.country}) - ${u.ranking ? `Ranked #${u.ranking}` : 'Excellent program'}`).join('\n')}
+${topResults.map((u, i) => `${i + 1}. **${u.name}** (${u.country})`).join('\n')}
 
-Just say something like **"Shortlist ${recommendations[0]?.name || 'MIT'} as a target"** and I'll add it to your list!`;
+Just say **"Shortlist ${topResults[0].name}"** to add it to your list!`;
+          } else {
+            actionResponse = `I couldn't find universities matching "${searchQuery}". Please try with a different name.
+
+For example, say **"Shortlist Stanford as a dream"** or **"Shortlist University of Toronto as a target"**`;
+          }
+        } catch (err) {
+          console.error('Broader search error:', err);
+          actionResponse = `I'd be happy to shortlist a university for you! Please tell me the full name of the university.
+
+For example, say **"Shortlist Stanford as a dream"** or **"Shortlist University of Toronto as a target"**`;
+        }
+      } else {
+        actionResponse = `I'd be happy to shortlist a university for you! Please tell me the name of the university you'd like to add.
+
+For example, say **"Shortlist Stanford as a dream"** or **"Shortlist University of Toronto as a target"**
+
+I can search for any university worldwide!`;
+      }
     }
   }
   
   // Detect lock intent
   else if (lowerMessage.includes('lock') || lowerMessage.includes('finalize') || lowerMessage.includes('commit to')) {
     console.log('Lock intent detected. Message:', message);
-    console.log('Universities in DB:', universities.length);
-    const uni = findUniversityInMessage(message, universities);
-    console.log('Found university:', uni ? uni.name : 'None', 'ID:', uni?._id);
     
-    if (uni && uni._id) {
-      // Check if shortlisted first
-      const shortlisted = user.shortlistedUniversities.find(
-        s => s.universityId && uni._id && s.universityId.toString() === uni._id.toString()
-      );
+    // Try to find university - first in local DB, then search live API
+    let uni = findUniversityInMessage(message, universities);
+    let isLiveUni = false;
+    
+    // If not found in local DB, search live universities
+    if (!uni || !uni._id) {
+      const searchQuery = extractUniversityName(message);
+      if (searchQuery) {
+        try {
+          const liveResults = await searchLiveUniversities(searchQuery);
+          if (liveResults && liveResults.length > 0) {
+            const lowerQuery = searchQuery.toLowerCase();
+            uni = liveResults.find(u => u.name.toLowerCase().includes(lowerQuery)) || liveResults[0];
+            isLiveUni = true;
+          }
+        } catch (err) {
+          console.error('Error searching live universities:', err);
+        }
+      }
+    }
+    
+    if (uni) {
+      const universityId = isLiveUni ? uni.id : (uni._id ? uni._id.toString() : generateId(uni.name, uni.country));
       
-      const alreadyLocked = user.lockedUniversities.find(
+      // Check if already locked (check both arrays)
+      const alreadyLockedOld = user.lockedUniversities?.find(
         l => l.universityId && uni._id && l.universityId.toString() === uni._id.toString()
       );
+      const alreadyLockedLive = user.liveLockedUniversities?.find(
+        l => l.universityId === universityId
+      );
       
-      if (alreadyLocked) {
+      if (alreadyLockedOld || alreadyLockedLive) {
         actionResponse = `**${uni.name}** is already locked! ✅
 
 You're committed to applying here. Check the **Application Guide** tab for your personalized task list and deadlines for this university.
 
 Is there another university you'd like to lock?`;
       } else {
-        // Lock the university
-        user.lockedUniversities.push({ 
-          universityId: uni._id, 
-          lockedAt: new Date() 
+        // Lock the university (use live array)
+        user.liveLockedUniversities.push({ 
+          universityId: universityId,
+          universityName: uni.name,
+          country: uni.country,
+          lockedAt: new Date()
         });
         
         // Also add to shortlist if not already
-        if (!shortlisted) {
-          user.shortlistedUniversities.push({ 
-            universityId: uni._id, 
+        const alreadyShortlisted = user.liveShortlistedUniversities?.find(s => s.universityId === universityId);
+        if (!alreadyShortlisted) {
+          user.liveShortlistedUniversities.push({ 
+            universityId: universityId,
+            universityName: uni.name,
+            country: uni.country,
             category: 'target',
-            addedAt: new Date()
+            shortlistedAt: new Date()
           });
         }
         
         // Update stage
+        const totalLocked = (user.lockedUniversities?.length || 0) + user.liveLockedUniversities.length;
         if (user.currentStage < 3) {
           user.currentStage = 3;
         }
-        if (user.lockedUniversities.length >= 3) {
+        if (totalLocked >= 3) {
           user.currentStage = 4;
         }
         
@@ -134,7 +236,7 @@ Is there another university you'd like to lock?`;
         actions.push({ type: 'lock', universityName: uni.name });
         
         // Create default tasks for this university
-        await createApplicationTasks(user._id, uni);
+        await createApplicationTasksForLive(user._id, uni);
         
         actionResponse = `🔒 **${uni.name} is now locked!** You're committed to applying here.
 
@@ -152,28 +254,27 @@ I've created a personalized application checklist for you:
 • Application typically due: ${getTypicalDeadline(uni)}
 • Estimated cost: $${uni.tuitionFee?.toLocaleString() || '30,000-50,000'}/year
 
-**You now have ${user.lockedUniversities.length} locked university(ies).**
+**You now have ${totalLocked} locked university(ies).**
 
 Head to the **Application Guide** tab to see your complete task list, or lock more universities to add to your application pool!`;
       }
-    } else if (user.shortlistedUniversities.length > 0) {
+    } else {
       // No university specified, show shortlisted options
-      const shortlistedUnis = await University.find({
-        _id: { $in: user.shortlistedUniversities.map(s => s.universityId) }
-      });
+      const liveShortlisted = user.liveShortlistedUniversities || [];
       
-      actionResponse = `Which university would you like to lock? Here's your current shortlist:
+      if (liveShortlisted.length > 0) {
+        actionResponse = `Which university would you like to lock? Here's your current shortlist:
 
-${shortlistedUnis.map((u, i) => {
-  const category = user.shortlistedUniversities.find(s => s.universityId.toString() === u._id.toString())?.category;
-  return `${i + 1}. **${u.name}** (${category?.toUpperCase() || 'Target'})`;
+${liveShortlisted.map((u, i) => {
+  return `${i + 1}. **${u.universityName}** (${u.category?.toUpperCase() || 'Target'})`;
 }).join('\n')}
 
 Just say **"Lock [university name]"** to commit to applying there!`;
-    } else {
-      actionResponse = `You need to shortlist some universities before you can lock them!
+      } else {
+        actionResponse = `You need to shortlist some universities before you can lock them!
 
-Would you like me to recommend universities for your profile? Just say **"recommend universities"** and I'll give you personalized suggestions.`;
+Would you like me to recommend universities for your profile? Just say **"recommend universities"** and I'll give you personalized suggestions, or tell me a university name and I'll shortlist it for you.`;
+      }
     }
   }
   
@@ -251,6 +352,23 @@ ${getTaskTips(taskTitle)}
 What else can I help you with?`;
     }
   }
+  
+  // Safety check: if we have actions but no response, generate one
+  if (actions.length > 0 && !actionResponse) {
+    console.log('Safety check: generating response for', actions.length, 'actions');
+    const actionSummary = actions.map(a => {
+      if (a.type === 'shortlist') return `✅ Shortlisted **${a.universityName}** as ${a.category}`;
+      if (a.type === 'lock') return `🔒 Locked **${a.universityName}**`;
+      if (a.type === 'create_task') return `📝 Created task: ${a.title}`;
+      return '';
+    }).filter(Boolean).join('\n');
+    
+    actionResponse = `Done! Here's what I did:\n\n${actionSummary}\n\nWhat would you like to do next?`;
+  }
+  
+  console.log('=== processUserActions FINAL ===');
+  console.log('  actions:', JSON.stringify(actions));
+  console.log('  actionResponse:', actionResponse ? actionResponse.substring(0, 100) : 'NULL');
   
   return { actions, actionResponse };
 }
@@ -365,6 +483,95 @@ function getTopRecommendations(user, universities, count) {
     .slice(0, count);
 }
 
+// Helper: Extract university name from message
+function extractUniversityName(message) {
+  console.log('extractUniversityName input:', message);
+  
+  const lowerMessage = message.toLowerCase();
+  
+  // First, try to extract using specific patterns
+  // Pattern: "shortlist [name] as [category]"
+  let match = message.match(/shortlist\s+(.+?)\s+as\s+(?:a\s+)?(?:dream|target|safe)/i);
+  if (match && match[1]) {
+    const name = match[1].trim();
+    console.log('Pattern 1 matched, extracted:', name);
+    if (name.length >= 2 && !['dream', 'target', 'safe'].includes(name.toLowerCase())) {
+      return name;
+    }
+  }
+  
+  // Pattern: "lock [name]"
+  match = message.match(/lock\s+(.+)$/i);
+  if (match && match[1]) {
+    const name = match[1].trim();
+    console.log('Pattern 2 matched, extracted:', name);
+    if (name.length >= 2) {
+      return name;
+    }
+  }
+  
+  // Pattern: "shortlist [name]" (without category)
+  match = message.match(/shortlist\s+(.+)$/i);
+  if (match && match[1]) {
+    let name = match[1].trim()
+      .replace(/\s+as\s+(?:a\s+)?(?:dream|target|safe)\s*$/i, '')
+      .trim();
+    console.log('Pattern 3 matched, extracted:', name);
+    if (name.length >= 2 && !['dream', 'target', 'safe', 'a', 'as'].includes(name.toLowerCase())) {
+      return name;
+    }
+  }
+  
+  // Pattern: "add [name] to my list"
+  match = message.match(/add\s+(.+?)\s+to\s+(?:my\s+)?(?:list|shortlist)/i);
+  if (match && match[1]) {
+    const name = match[1].trim();
+    console.log('Pattern 4 matched, extracted:', name);
+    if (name.length >= 2) {
+      return name;
+    }
+  }
+  
+  // Fallback: find capitalized words that look like a university name
+  const words = message.split(/\s+/);
+  const skipWords = ['Shortlist', 'Lock', 'Add', 'Dream', 'Target', 'Safe', 'The', 'As', 'To', 'My', 'A', 'An'];
+  const capitalizedWords = words.filter(w => 
+    w.length > 1 && 
+    /^[A-Z]/.test(w) && 
+    !skipWords.includes(w)
+  );
+  
+  if (capitalizedWords.length > 0) {
+    const result = capitalizedWords.join(' ');
+    console.log('Returning capitalized words:', result);
+    return result;
+  }
+  
+  console.log('No university name found');
+  return null;
+}
+
+// Helper: Create application tasks for locked live university
+async function createApplicationTasksForLive(userId, university) {
+  const tasks = [
+    { title: `Research ${university.name}'s admission requirements`, priority: 'high' },
+    { title: `Prepare SOP for ${university.name}`, priority: 'high' },
+    { title: `Check ${university.name}'s application deadline`, priority: 'high' },
+    { title: `Gather financial documents for ${university.name}`, priority: 'medium' },
+    { title: `Complete ${university.name} application form`, priority: 'medium' }
+  ];
+  
+  for (const task of tasks) {
+    await Task.create({
+      userId: userId,
+      title: task.title,
+      priority: task.priority,
+      aiGenerated: true,
+      createdAt: new Date()
+    });
+  }
+}
+
 // Helper: Create application tasks for locked university
 async function createApplicationTasks(userId, university) {
   const tasks = [
@@ -452,12 +659,23 @@ function getTaskTips(taskTitle) {
 // Helper to build system context
 async function buildSystemContext(user, universities) {
   const shortlistedUnis = await University.find({
-    _id: { $in: user.shortlistedUniversities.map(s => s.universityId) }
+    _id: { $in: (user.shortlistedUniversities || []).map(s => s.universityId) }
   });
   
   const lockedUnis = await University.find({
-    _id: { $in: user.lockedUniversities.map(l => l.universityId) }
+    _id: { $in: (user.lockedUniversities || []).map(l => l.universityId) }
   });
+  
+  // Combine with live universities
+  const allShortlisted = [
+    ...shortlistedUnis.map(u => `- ${u.name} (${u.country})`),
+    ...(user.liveShortlistedUniversities || []).map(u => `- ${u.universityName} (${u.country}) [${u.category}]`)
+  ];
+  
+  const allLocked = [
+    ...lockedUnis.map(u => `- ${u.name} (${u.country})`),
+    ...(user.liveLockedUniversities || []).map(u => `- ${u.universityName} (${u.country})`)
+  ];
   
   const tasks = await Task.find({ userId: user._id, completed: false });
   
@@ -483,26 +701,27 @@ CURRENT USER PROFILE:
 - Current Stage: ${user.currentStage} (1=Profile Building, 2=Discovering Universities, 3=Finalizing, 4=Application Prep)
 
 SHORTLISTED UNIVERSITIES:
-${shortlistedUnis.map(u => `- ${u.name} (${u.country})`).join('\n') || 'None yet'}
+${allShortlisted.join('\n') || 'None yet'}
 
 LOCKED UNIVERSITIES:
-${lockedUnis.map(u => `- ${u.name} (${u.country})`).join('\n') || 'None yet'}
+${allLocked.join('\n') || 'None yet'}
 
 PENDING TASKS:
 ${tasks.map(t => `- ${t.title} (${t.priority} priority)`).join('\n') || 'No pending tasks'}
 
-AVAILABLE UNIVERSITIES IN DATABASE:
-${universities.slice(0, 10).map(u => `- ${u.name} (${u.country}, Ranking: ${u.ranking}, Acceptance: ${u.acceptanceRate}%)`).join('\n')}
-
 YOUR CAPABILITIES:
 1. Analyze profile strengths and gaps
-2. Recommend universities (Dream/Target/Safe categories)
-3. Explain why universities fit or have risks
+2. Recommend universities (Dream/Target/Safe categories) - ONLY from Live Search results
+3. Explain why universities fit or have risks based on user's GPA, budget, and preferences
 4. Suggest actions like shortlisting, locking universities
 5. Create and suggest to-do tasks
 6. Guide through each stage of the journey
 
-IMPORTANT: You must guide decisions, not just answer questions. Be proactive in recommending next steps.
+IMPORTANT RULES:
+- You must guide decisions, not just answer questions. Be proactive in recommending next steps.
+- ONLY recommend universities that are available in the Live Search tab. Do NOT invent or suggest universities outside of the live-fetched list.
+- When user asks for recommendations, direct them to the Live Search tab or use the "recommend universities" command which fetches live data.
+- Base all university recommendations on the user's profile (GPA, budget, preferred countries, intended degree).
 
 When recommending actions, format them as:
 [ACTION: SHORTLIST university_name category]
@@ -514,9 +733,14 @@ These will be parsed and executed by the system.`;
 
 // Chat with AI Counsellor
 router.post('/chat', authMiddleware, async (req, res) => {
+  // Declare these outside try block so they're accessible in catch
+  let actions = [];
+  let actionResponse = null;
+  let user = null;
+  
   try {
     const { message } = req.body;
-    const user = await User.findById(req.userId);
+    user = await User.findById(req.userId);
     const universities = await University.find({});
     
     if (!user.onboardingCompleted) {
@@ -527,30 +751,93 @@ router.post('/chat', authMiddleware, async (req, res) => {
     }
 
     // Process actions from user message (works for both API and fallback mode)
-    const { actions, actionResponse } = await processUserActions(message, user, universities);
+    console.log('=== CHAT REQUEST ===');
+    console.log('Message:', message);
     
-    // Check if Gemini API key is configured
-    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'your-gemini-api-key-here') {
+    const processResult = await processUserActions(message, user, universities);
+    actions = processResult.actions;
+    actionResponse = processResult.actionResponse;
+    
+    console.log('processUserActions returned:');
+    console.log('  - actions:', actions.length);
+    console.log('  - actionResponse:', actionResponse ? 'YES (' + actionResponse.substring(0, 50) + '...)' : 'NULL');
+    
+    // Check if this is a built-in command that can be handled without Gemini
+    const lowerMessage = message.toLowerCase();
+    const isBuiltInCommand = (lowerMessage.includes('show') && lowerMessage.includes('shortlist')) ||
+                              lowerMessage.includes('my shortlist') ||
+                              lowerMessage.includes('view shortlist') ||
+                              lowerMessage.includes('see shortlist') ||
+                              lowerMessage.includes('recommend') ||
+                              lowerMessage.includes('suggest') ||
+                              lowerMessage.includes('analyze my profile') ||
+                              lowerMessage.includes('next step') ||
+                              lowerMessage.includes('what should');
+    
+    // Check if Gemini API key is configured OR if we already have an actionResponse OR if it's a built-in command
+    // If actionResponse exists or it's a built-in command, use fallback directly without calling Gemini
+    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'your-gemini-api-key-here' || actionResponse || isBuiltInCommand) {
       // Enhanced fallback response with action handling
       let fallbackReply;
+      let universityRecommendations = null;
       
-      if (actionResponse) {
+      if (actionResponse && actionResponse.length > 0) {
         // If an action was taken, use the action response
         fallbackReply = actionResponse;
+        console.log('Using actionResponse');
       } else {
         // Otherwise get contextual response
-        fallbackReply = await getFallbackResponse(message, user, universities);
+        console.log('actionResponse is falsy, using fallback');
+        const fallbackResult = await getFallbackResponse(message, user, universities);
+        
+        // Check if the response is structured university recommendations or shortlist display
+        if (fallbackResult && typeof fallbackResult === 'object' && fallbackResult.type === 'university_recommendations') {
+          universityRecommendations = fallbackResult.data;
+          fallbackReply = universityRecommendations.error 
+            ? universityRecommendations.message 
+            : universityRecommendations.intro;
+        } else if (fallbackResult && typeof fallbackResult === 'object' && fallbackResult.type === 'shortlist_display') {
+          universityRecommendations = fallbackResult.data;
+          universityRecommendations._isShortlist = true; // Mark as shortlist display
+          fallbackReply = universityRecommendations.isEmpty 
+            ? `${universityRecommendations.intro}\n\n${universityRecommendations.message}`
+            : universityRecommendations.intro;
+        } else {
+          fallbackReply = fallbackResult;
+        }
       }
       
-      return res.json({
+      // Save to chat history (important for fallback mode too!)
+      let chatHistory = await ChatHistory.findOne({ userId: req.userId });
+      if (!chatHistory) {
+        chatHistory = new ChatHistory({ userId: req.userId, messages: [] });
+      }
+      chatHistory.messages.push(
+        { role: 'user', content: message },
+        { role: 'assistant', content: typeof fallbackReply === 'string' ? fallbackReply : JSON.stringify(fallbackReply), actions: actions }
+      );
+      await chatHistory.save();
+      
+      console.log('Sending response with', actions.length, 'actions');
+      
+      const responseData = {
         response: fallbackReply,
         actions: actions,
         updatedProfile: {
           shortlistedUniversities: user.shortlistedUniversities,
           lockedUniversities: user.lockedUniversities,
+          liveShortlistedUniversities: user.liveShortlistedUniversities,
+          liveLockedUniversities: user.liveLockedUniversities,
           currentStage: user.currentStage
         }
-      });
+      };
+      
+      // Include university recommendations if present
+      if (universityRecommendations) {
+        responseData.universityRecommendations = universityRecommendations;
+      }
+      
+      return res.json(responseData);
     }
     
     // universities already fetched above
@@ -572,8 +859,8 @@ router.post('/chat', authMiddleware, async (req, res) => {
     // Initialize Gemini
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    // Use gemini-1.5-flash (latest model)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    // Use gemini-2.0-flash (latest model)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
     
     // Create chat
     const chat = model.startChat({
@@ -657,24 +944,61 @@ router.post('/chat', authMiddleware, async (req, res) => {
       updatedProfile: {
         shortlistedUniversities: user.shortlistedUniversities,
         lockedUniversities: user.lockedUniversities,
+        liveShortlistedUniversities: user.liveShortlistedUniversities,
+        liveLockedUniversities: user.liveLockedUniversities,
         currentStage: user.currentStage
       }
     });
   } catch (error) {
-    console.error('AI Chat Error:', error);
+    console.error('AI Chat Error:', error.message);
+    console.log('Falling back to built-in responses...');
     
-    // Return fallback response on error
-    const user = await User.findById(req.userId);
-    const fallbackReply = await getFallbackResponse(req.body.message, user);
-    res.json({
-      response: fallbackReply,
-      actions: [],
-      updatedProfile: {
-        shortlistedUniversities: user?.shortlistedUniversities || [],
-        lockedUniversities: user?.lockedUniversities || [],
-        currentStage: user?.currentStage || 1
+    // Return actionResponse if we already processed an action, otherwise use fallback
+    const currentUser = await User.findById(req.userId);
+    let fallbackReply;
+    let universityRecommendations = null;
+    
+    // Check if we already have an actionResponse from processUserActions
+    if (actionResponse && actionResponse.length > 0) {
+      console.log('Using actionResponse despite Gemini error');
+      fallbackReply = actionResponse;
+    } else {
+      const fallbackResult = await getFallbackResponse(req.body.message, currentUser);
+      
+      // Check if the response is structured university recommendations or shortlist display
+      if (fallbackResult && typeof fallbackResult === 'object' && fallbackResult.type === 'university_recommendations') {
+        universityRecommendations = fallbackResult.data;
+        fallbackReply = universityRecommendations.error 
+          ? universityRecommendations.message 
+          : universityRecommendations.intro;
+      } else if (fallbackResult && typeof fallbackResult === 'object' && fallbackResult.type === 'shortlist_display') {
+        universityRecommendations = fallbackResult.data;
+        universityRecommendations._isShortlist = true;
+        fallbackReply = universityRecommendations.isEmpty 
+          ? `${universityRecommendations.intro}\n\n${universityRecommendations.message}`
+          : universityRecommendations.intro;
+      } else {
+        fallbackReply = fallbackResult;
       }
-    });
+    }
+    
+    const responseData = {
+      response: fallbackReply,
+      actions: actions || [],
+      updatedProfile: {
+        shortlistedUniversities: currentUser?.shortlistedUniversities || [],
+        lockedUniversities: currentUser?.lockedUniversities || [],
+        liveShortlistedUniversities: currentUser?.liveShortlistedUniversities || [],
+        liveLockedUniversities: currentUser?.liveLockedUniversities || [],
+        currentStage: currentUser?.currentStage || 1
+      }
+    };
+    
+    if (universityRecommendations) {
+      responseData.universityRecommendations = universityRecommendations;
+    }
+    
+    res.json(responseData);
   }
 });
 
@@ -683,9 +1007,9 @@ async function getFallbackResponse(message, user, universities = []) {
   const lowerMessage = message.toLowerCase();
   const firstName = user.fullName?.split(' ')[0] || 'there';
   
-  // Get user's shortlisted and locked universities for context
-  const shortlistedCount = user.shortlistedUniversities?.length || 0;
-  const lockedCount = user.lockedUniversities?.length || 0;
+  // Get user's shortlisted and locked universities for context (combine old and live)
+  const shortlistedCount = (user.shortlistedUniversities?.length || 0) + (user.liveShortlistedUniversities?.length || 0);
+  const lockedCount = (user.lockedUniversities?.length || 0) + (user.liveLockedUniversities?.length || 0);
   
   // Analyze profile strength
   const profileStrengths = [];
@@ -773,31 +1097,21 @@ ${getPersonalizedRecommendation(user, profileGaps)}
 Want me to show you specific universities that match your profile? Just say **"recommend universities"**!`;
   }
   
-  // University Recommendations
-  if (lowerMessage.includes('recommend') || lowerMessage.includes('universit') || lowerMessage.includes('college') || lowerMessage.includes('school')) {
-    const countries = user.preferredCountries || ['United States'];
-    
-    return `Based on your profile, here's my curated list of universities for **${user.intendedDegree} in ${user.fieldOfStudy}**:
-
-**🌟 Dream Universities** *(Reach schools – competitive but absolutely worth trying)*
-${getDreamUniversities(user, countries)}
-
-These are prestigious programs where your profile would need to shine. ${parseFloat(user.gpa) >= 3.7 ? 'Your strong GPA gives you a fighting chance!' : 'A compelling SOP and strong recommendations will be crucial here.'}
-
-**🎯 Target Universities** *(Great match – realistic with your profile)*
-${getTargetUniversities(user, countries)}
-
-These universities have programs that align well with your background. Your acceptance chances here are solid.
-
-**✅ Safe Universities** *(High confidence – likely admits)*
-${getSafeUniversities(user, countries)}
-
-These are quality programs where you're likely to get admitted, often with funding opportunities.
-
-**💡 My Advice:**
-I recommend shortlisting **2-3 Dream**, **3-4 Target**, and **2-3 Safe** schools. This balanced approach maximizes your chances while still aiming high.
-
-Head to the **Universities** tab to explore these in detail, or ask me about any specific university – I'll explain exactly why it's right (or risky) for you!`;
+  // Show my shortlist - display shortlisted universities as cards
+  if ((lowerMessage.includes('show') && lowerMessage.includes('shortlist')) || 
+      lowerMessage.includes('my shortlist') || 
+      lowerMessage.includes('view shortlist') ||
+      lowerMessage.includes('see shortlist')) {
+    const shortlistData = await getShortlistedUniversitiesData(user);
+    return { type: 'shortlist_display', data: shortlistData };
+  }
+  
+  // University Recommendations - but NOT if user is trying to shortlist/lock a specific university
+  const hasActionIntent = lowerMessage.includes('shortlist') || lowerMessage.includes('lock') || lowerMessage.includes('add to') || lowerMessage.includes('finalize');
+  if (!hasActionIntent && (lowerMessage.includes('recommend') || lowerMessage.includes('suggest') || lowerMessage.includes('show me universities') || lowerMessage.includes('find universities') || lowerMessage.includes('which universities'))) {
+    // Return structured recommendation data for card rendering
+    const recommendations = await getLiveUniversityRecommendationsData(user);
+    return { type: 'university_recommendations', data: recommendations };
   }
   
   // Next steps and what to do
@@ -805,42 +1119,41 @@ Head to the **Universities** tab to explore these in detail, or ask me about any
     return getNextStepsResponse(user, shortlistedCount, lockedCount, profileGaps);
   }
   
-  // Shortlisting help
-  if (lowerMessage.includes('shortlist') || lowerMessage.includes('add') || lowerMessage.includes('save')) {
-    return `To shortlist a university, head over to the **Universities** tab. There you'll see recommendations tailored to your profile.
+  // Shortlisting help - only show generic help if they're asking about the process, not trying to shortlist a specific university
+  if ((lowerMessage.includes('how') && lowerMessage.includes('shortlist')) || 
+      (lowerMessage.includes('shortlist') && lowerMessage.includes('?')) ||
+      lowerMessage === 'shortlist' || 
+      lowerMessage === 'how to shortlist') {
+    return `To shortlist a university through chat, just say something like:
+• **"Shortlist Stanford as a dream"**
+• **"Shortlist University of Toronto as a target"**
+• **"Shortlist MIT"**
 
-Each university card has a **"Shortlist"** button – click it to add the university to your list. You can categorize them as:
-• **Dream** – Competitive reach schools
-• **Target** – Good match for your profile  
-• **Safe** – High acceptance probability
+I can search for any university worldwide! Or you can go to the **Live Search** tab to browse and shortlist universities.
 
-I recommend having **6-8 universities** total across all categories.
-
-Currently, you have **${shortlistedCount} universities** shortlisted. ${shortlistedCount < 5 ? 'You should add more to have good options!' : 'Good progress!'}`;
+Currently, you have **${shortlistedCount} universities** shortlisted. ${shortlistedCount < 5 ? 'I recommend having 6-8 total!' : 'Good progress!'}`;
   }
   
-  // Lock university help
-  if (lowerMessage.includes('lock') || lowerMessage.includes('finalize') || lowerMessage.includes('confirm')) {
+  // Lock university help - only show generic help if asking how, not trying to lock specific university
+  if ((lowerMessage.includes('how') && lowerMessage.includes('lock')) ||
+      (lowerMessage.includes('lock') && lowerMessage.includes('?')) ||
+      lowerMessage === 'lock' ||
+      lowerMessage === 'how to lock') {
     if (shortlistedCount === 0) {
-      return `Before you can lock a university, you need to shortlist some options first. Head to the **Universities** tab to browse and shortlist universities.
+      return `Before you can lock a university, you need to shortlist some options first. 
 
-Once you have a shortlist, locking a university tells me you're committed to applying there. I'll then create a complete application checklist with:
-• All required documents
-• Deadline reminders
-• Step-by-step tasks
+Just say **"Shortlist Stanford"** or **"Shortlist MIT as a dream"** to add universities to your list!
 
-Start by shortlisting 5-8 universities, then we'll work together to decide which ones to lock!`;
+Once you have a shortlist, locking a university tells me you're committed to applying there. I'll then create a complete application checklist.`;
     }
     
-    return `Locking a university means you're committed to applying there. Once locked, I'll create a personalized application plan with tasks and deadlines.
+    return `To lock a university through chat, just say:
+• **"Lock Stanford"**
+• **"Lock University of Toronto"**
 
-You have **${shortlistedCount} universities** shortlisted. To lock one:
-1. Go to **My Shortlist** section
-2. Click the **Lock** button on your chosen university
+Locking means you're committed to applying there. I'll create a personalized application plan with tasks and deadlines.
 
-${lockedCount > 0 ? `You've already locked ${lockedCount} university(ies) – great progress!` : 'I recommend locking at least 3-4 universities to have solid options.'}
-
-Need help deciding which to lock? Tell me which universities you're considering and I'll give you my honest opinion!`;
+${lockedCount > 0 ? `You've already locked ${lockedCount} university(ies) – great progress!` : 'I recommend locking at least 3-4 universities.'}`;
   }
   
   // Application and deadlines
@@ -913,8 +1226,219 @@ Your current SOP status: **${user.sopStatus}**
 ${user.sopStatus === 'not-started' ? '👉 I recommend starting your SOP this week!' : user.sopStatus === 'draft' ? '👉 Great progress! Keep refining it.' : '👉 Excellent – you\'re ahead of the game!'}`;
   }
   
+  // Note: shortlist/lock intents are now fully handled in processUserActions
+  // This section is kept as backup only if actionResponse is null after processUserActions
+  // (which shouldn't happen with current logic)
+  
   // Default contextual response
   return getContextualDefaultResponse(user, firstName, shortlistedCount, lockedCount, profileGaps);
+}
+
+// Fetch and analyze live universities - returns structured data for card rendering
+async function getLiveUniversityRecommendationsData(user) {
+  const firstName = user.fullName?.split(' ')[0] || 'there';
+  const countries = user.preferredCountries || ['United States'];
+  const userGPA = parseFloat(user.gpa) || 0;
+  
+  try {
+    // Fetch live universities for user's preferred countries
+    const { fetchUniversitiesForCountries } = require('../services/liveUniversityApi');
+    const liveUniversities = await fetchUniversitiesForCountries(countries, 30);
+    
+    if (!liveUniversities || liveUniversities.length === 0) {
+      return {
+        error: true,
+        message: `I'm having trouble fetching universities right now, ${firstName}. Please try again in a moment, or head to the **Live Search** tab to browse universities directly.`
+      };
+    }
+    
+    // Score and categorize each university based on user profile
+    const scoredUniversities = liveUniversities.map(uni => {
+      let fitScore = 0;
+      let reasons = [];
+      let risks = [];
+      
+      // Budget analysis
+      const totalCost = (uni.tuitionFee || 25000) + (uni.livingCostPerYear || 15000);
+      
+      if (user.budgetMax && totalCost <= user.budgetMax) {
+        fitScore += 25;
+        reasons.push('Within your budget');
+      } else if (user.budgetMax && totalCost <= user.budgetMax * 1.2) {
+        fitScore += 15;
+        reasons.push('Slightly above budget');
+      } else if (user.budgetMax) {
+        risks.push('May exceed budget');
+      }
+      
+      // GPA/Academic fit analysis
+      const hasMatchingProgram = uni.programs?.some(p => {
+        if (p.degree?.toLowerCase() === user.intendedDegree?.toLowerCase()) {
+          fitScore += 15;
+          if (p.requirements?.minGPA) {
+            if (userGPA >= p.requirements.minGPA + 0.3) {
+              fitScore += 25;
+              reasons.push('GPA exceeds requirements');
+            } else if (userGPA >= p.requirements.minGPA) {
+              fitScore += 15;
+              reasons.push('GPA meets requirements');
+            } else {
+              risks.push(`Min GPA: ${p.requirements.minGPA}`);
+            }
+          } else {
+            fitScore += 10;
+          }
+          return true;
+        }
+        return false;
+      });
+      
+      if (!hasMatchingProgram && user.intendedDegree) {
+        fitScore += 10;
+      }
+      
+      // Acceptance rate analysis
+      if (uni.acceptanceRate) {
+        if (uni.acceptanceRate > 60) {
+          fitScore += 20;
+          reasons.push('High acceptance rate');
+        } else if (uni.acceptanceRate > 30) {
+          fitScore += 10;
+          reasons.push('Moderate acceptance');
+        } else if (uni.acceptanceRate < 15) {
+          risks.push('Highly competitive');
+        }
+      }
+      
+      // Country preference bonus
+      if (countries.includes(uni.country)) {
+        fitScore += 5;
+      }
+      
+      // Categorize based on fit score
+      let category;
+      if (fitScore >= 60) {
+        category = 'safe';
+      } else if (fitScore >= 35) {
+        category = 'target';
+      } else {
+        category = 'dream';
+      }
+      
+      return {
+        ...uni,
+        fitScore,
+        category,
+        reasons,
+        risks
+      };
+    });
+    
+    // Sort and slice by category
+    const dreamUnis = scoredUniversities.filter(u => u.category === 'dream').sort((a, b) => b.fitScore - a.fitScore).slice(0, 3);
+    const targetUnis = scoredUniversities.filter(u => u.category === 'target').sort((a, b) => b.fitScore - a.fitScore).slice(0, 4);
+    const safeUnis = scoredUniversities.filter(u => u.category === 'safe').sort((a, b) => b.fitScore - a.fitScore).slice(0, 3);
+    
+    const gpaAdvice = userGPA >= 3.7 
+      ? 'Your strong GPA gives you a fighting chance at dream schools!' 
+      : userGPA >= 3.0 
+        ? 'A compelling SOP and strong recommendations will strengthen your dream school applications.'
+        : 'Focus on target and safe schools while highlighting your unique strengths in your SOP.';
+    
+    return {
+      error: false,
+      intro: `${firstName}, here are universities from **Live Search** matched to your profile for **${user.intendedDegree} in ${user.fieldOfStudy}**:`,
+      dream: dreamUnis,
+      target: targetUnis,
+      safe: safeUnis,
+      advice: gpaAdvice,
+      profileSummary: {
+        gpa: user.gpa || 'Not provided',
+        budgetMin: user.budgetMin || 0,
+        budgetMax: user.budgetMax || 0,
+        countries: countries
+      }
+    };
+    
+  } catch (error) {
+    console.error('Error fetching live recommendations:', error);
+    return {
+      error: true,
+      message: `I'm having trouble fetching live university data right now, ${firstName}. Please head to the **Live Search** tab to browse universities, or try again in a moment.`
+    };
+  }
+}
+
+// Get shortlisted universities data for card display
+async function getShortlistedUniversitiesData(user) {
+  const firstName = user.fullName?.split(' ')[0] || 'there';
+  
+  try {
+    // Get live shortlisted universities
+    const liveShortlisted = user.liveShortlistedUniversities || [];
+    
+    if (liveShortlisted.length === 0) {
+      return {
+        error: false,
+        isEmpty: true,
+        intro: `${firstName}, you haven't shortlisted any universities yet.`,
+        message: `Start by asking me to **"recommend universities"** or visit the **Live Search** tab to browse and shortlist universities that interest you!`
+      };
+    }
+    
+    const dreamUnis = [];
+    const targetUnis = [];
+    const safeUnis = [];
+    
+    // Use stored shortlist data directly - no need to search each university
+    for (const shortlisted of liveShortlisted) {
+      const uniData = {
+        id: shortlisted.universityId,
+        name: shortlisted.universityName,
+        country: shortlisted.country,
+        category: shortlisted.category,
+        shortlistedAt: shortlisted.shortlistedAt
+      };
+      
+      // Sort into categories
+      if (shortlisted.category === 'dream') {
+        dreamUnis.push(uniData);
+      } else if (shortlisted.category === 'safe') {
+        safeUnis.push(uniData);
+      } else {
+        targetUnis.push(uniData);
+      }
+    }
+    
+    const totalCount = dreamUnis.length + targetUnis.length + safeUnis.length;
+    const lockedCount = (user.lockedUniversities?.length || 0) + (user.liveLockedUniversities?.length || 0);
+    
+    return {
+      error: false,
+      isEmpty: false,
+      intro: `${firstName}, here are your **${totalCount} shortlisted universities**:`,
+      dream: dreamUnis,
+      target: targetUnis,
+      safe: safeUnis,
+      summary: {
+        total: totalCount,
+        locked: lockedCount,
+        dream: dreamUnis.length,
+        target: targetUnis.length,
+        safe: safeUnis.length
+      },
+      advice: lockedCount === 0 
+        ? `Ready to commit? Say **"lock [university name]"** to lock a university and I'll create your application checklist!`
+        : `Great progress! You have ${lockedCount} university(ies) locked. Check the **Application Guide** for your tasks.`
+    };
+    
+  } catch (error) {
+    console.error('Error fetching shortlisted universities:', error);
+    return {
+      error: true,
+      message: `I'm having trouble fetching your shortlist right now, ${firstName}. Please try again or visit the **Shortlisted** tab directly.`
+    };
+  }
 }
 
 // Helper functions for enhanced responses
@@ -938,91 +1462,26 @@ function getPersonalizedRecommendation(user, gaps) {
   return `**You're on track!** Focus on finalizing your university shortlist and start preparing application materials.`;
 }
 
+// Note: University recommendations now come from getLiveUniversityRecommendations()
+// which fetches real-time data from the Live Search API.
+// The functions below are kept as fallbacks only if live fetch fails.
+
 function getDreamUniversities(user, countries) {
-  const field = user.fieldOfStudy?.toLowerCase() || '';
-  
-  if (countries.includes('United States') || countries.includes('USA')) {
-    if (field.includes('computer') || field.includes('software') || field.includes('data')) {
-      return `• **Stanford University** – Top 3 globally for CS, amazing Silicon Valley connections
-• **MIT** – Legendary tech programs, unmatched research opportunities
-• **Carnegie Mellon** – #1 for AI/ML, excellent industry partnerships`;
-    }
-    if (field.includes('business') || field.includes('mba') || field.includes('finance')) {
-      return `• **Harvard Business School** – The gold standard of business education
-• **Wharton (UPenn)** – Exceptional for finance and analytics
-• **Stanford GSB** – Perfect for tech + business intersection`;
-    }
-    return `• **Stanford University** – World-class across all disciplines
-• **Harvard University** – Unmatched brand recognition and network
-• **MIT** – Excellent for STEM and interdisciplinary programs`;
-  }
-  
-  if (countries.includes('United Kingdom') || countries.includes('UK')) {
-    return `• **University of Oxford** – Historic excellence, tutorial-based learning
-• **University of Cambridge** – Research powerhouse, strong ${field} department
-• **Imperial College London** – Top for STEM, industry connections`;
-  }
-  
-  if (countries.includes('Canada')) {
-    return `• **University of Toronto** – Canada's #1, global top 20
-• **McGill University** – Excellent reputation, vibrant Montreal location
-• **UBC** – Strong programs, beautiful Vancouver campus`;
-  }
-  
-  return `• Top universities in your preferred countries
-• Research-intensive institutions with global rankings
-• Programs with strong industry connections`;
+  return `• Visit the **Live Search** tab to see dream universities based on your profile
+• Dream schools typically have acceptance rates below 20%
+• Your profile will be analyzed against each university's requirements`;
 }
 
 function getTargetUniversities(user, countries) {
-  const field = user.fieldOfStudy?.toLowerCase() || '';
-  
-  if (countries.includes('United States') || countries.includes('USA')) {
-    return `• **University of Michigan** – Excellent programs, strong funding
-• **Georgia Tech** – Top for engineering, great value
-• **UT Austin** – Strong academics, vibrant culture
-• **UCSD** – Growing reputation, beautiful campus`;
-  }
-  
-  if (countries.includes('United Kingdom') || countries.includes('UK')) {
-    return `• **University of Edinburgh** – Beautiful city, strong programs
-• **University of Manchester** – Industry partnerships, diverse community
-• **King's College London** – Central London, excellent networking`;
-  }
-  
-  if (countries.includes('Canada')) {
-    return `• **University of Waterloo** – Co-op programs, tech connections
-• **Western University** – Strong programs, welcoming community
-• **Simon Fraser University** – Good funding opportunities`;
-  }
-  
-  return `• Well-ranked universities matching your profile
-• Programs with strong placement records
-• Good balance of academics and opportunities`;
+  return `• Visit the **Live Search** tab to see target universities matching your profile
+• Target schools are where your GPA and profile are competitive
+• These offer a good balance of prestige and realistic admission chances`;
 }
 
 function getSafeUniversities(user, countries) {
-  if (countries.includes('United States') || countries.includes('USA')) {
-    return `• **Arizona State University** – Innovative programs, high acceptance
-• **University of South Florida** – Good funding, growing reputation
-• **Northeastern University** – Excellent co-op program`;
-  }
-  
-  if (countries.includes('Canada')) {
-    return `• **Concordia University** – Montreal location, affordable
-• **University of Ottawa** – Bilingual advantage, co-op options
-• **Dalhousie University** – Maritime beauty, welcoming community`;
-  }
-  
-  if (countries.includes('Germany')) {
-    return `• **TU Munich** – World-class, nearly free tuition!
-• **RWTH Aachen** – Excellent engineering, industry connections
-• **TU Berlin** – Capital city, startup ecosystem`;
-  }
-  
-  return `• Quality universities with higher acceptance rates
-• Programs offering scholarships to international students
-• Good pathway to work opportunities post-graduation`;
+  return `• Visit the **Live Search** tab to see safe universities for your profile
+• Safe schools have higher acceptance rates and match your qualifications well
+• These ensure you have solid backup options`;
 }
 
 function getNextStepsResponse(user, shortlistedCount, lockedCount, gaps) {
@@ -1226,7 +1685,7 @@ FIELD MAPPING:
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     const chat = model.startChat({ history: messages });
     const result = await chat.sendMessage(message);
@@ -1537,6 +1996,16 @@ router.get('/history', authMiddleware, async (req, res) => {
   }
 });
 
+// Clear chat history
+router.delete('/history', authMiddleware, async (req, res) => {
+  try {
+    await ChatHistory.findOneAndDelete({ userId: req.userId });
+    res.json({ message: 'Chat history cleared' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // Get AI profile analysis
 router.get('/analyze-profile', authMiddleware, async (req, res) => {
   try {
@@ -1554,7 +2023,7 @@ router.get('/analyze-profile', authMiddleware, async (req, res) => {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
     
     const prompt = `Analyze this student profile for study abroad:
     
