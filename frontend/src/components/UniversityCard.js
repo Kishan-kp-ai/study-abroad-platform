@@ -15,19 +15,28 @@ import {
 } from 'react-icons/fi';
 import './UniversityCard.css';
 
-const FIXED_PROGRAMS = [
-  { name: 'Bachelor of Science (BS) in Computer Science', degree: 'bachelors', field: 'Computer Science' },
-  { name: 'Bachelor of Science (BS) in Data Science', degree: 'bachelors', field: 'Data Science' },
-  { name: 'Bachelor of Science (BS) in Electrical Engineering', degree: 'bachelors', field: 'Engineering' },
-  { name: 'Bachelor of Science (BS) in Business Administration', degree: 'bachelors', field: 'Business' },
-  { name: 'Master of Science (MS) in Computer Science', degree: 'masters', field: 'Computer Science' },
-  { name: 'Master of Science (MS) in Data Science', degree: 'masters', field: 'Data Science' },
-  { name: 'Doctor of Philosophy (PhD)', degree: 'phd', field: 'Computer Science' }
-];
-
-const getUniversityProgram = (uni) => {
-  const hash = uni.id ? uni.id.toString().split('').reduce((a, b) => a + b.charCodeAt(0), 0) : 0;
-  return FIXED_PROGRAMS[hash % FIXED_PROGRAMS.length];
+// Get the best matching program from university data
+// Priority: matchedProgram (from AI recommendations) > first program in list > fallback
+const getUniversityProgram = (uni, fitReasons = []) => {
+  // Use matchedProgram if available (set by AI recommendations)
+  if (uni.matchedProgram) {
+    return uni.matchedProgram;
+  }
+  
+  // Check if there's a matched program mentioned in fit reasons
+  const programReason = fitReasons.find(r => r.startsWith('Offers '));
+  if (programReason) {
+    const programName = programReason.replace('Offers ', '');
+    return { name: programName, degree: 'matched', field: 'matched' };
+  }
+  
+  // Use the first program from the university's program list
+  if (uni.programs && uni.programs.length > 0) {
+    return uni.programs[0];
+  }
+  
+  // Fallback
+  return { name: 'Program details on website', degree: 'unknown', field: 'unknown' };
 };
 
 const calculateTotalCost = (uni) => {
@@ -100,7 +109,7 @@ const UniversityCard = ({
   const totalCost = calculateTotalCost(university);
   const riskLevel = getRiskLevel(university);
   const acceptanceLikelihood = getAcceptanceLikelihood(university);
-  const program = getUniversityProgram(university);
+  const program = getUniversityProgram(university, fitReasons);
 
   const getCategoryStyle = () => {
     switch(category) {

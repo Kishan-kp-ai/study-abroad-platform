@@ -37,12 +37,20 @@ const liveUniversityApi = {
     return response.data;
   },
 
-  async shortlistUniversity(universityId, universityName, country, category = 'target') {
+  async shortlistUniversity(universityId, universityName, country, category = 'target', city, tuitionFee, livingCostPerYear, ranking, acceptanceRate, scholarshipsAvailable, website, internationalStudentRatio) {
     const response = await api.post('/live-universities/shortlist', {
       universityId,
       universityName,
       country,
-      category
+      category,
+      city,
+      tuitionFee,
+      livingCostPerYear,
+      ranking,
+      acceptanceRate,
+      scholarshipsAvailable,
+      website,
+      internationalStudentRatio
     });
     return response.data;
   },
@@ -52,11 +60,19 @@ const liveUniversityApi = {
     return response.data;
   },
 
-  async lockUniversity(universityId, universityName, country) {
+  async lockUniversity(universityId, universityName, country, city, tuitionFee, livingCostPerYear, ranking, acceptanceRate, scholarshipsAvailable, website, internationalStudentRatio) {
     const response = await api.post('/live-universities/lock', {
       universityId,
       universityName,
-      country
+      country,
+      city,
+      tuitionFee,
+      livingCostPerYear,
+      ranking,
+      acceptanceRate,
+      scholarshipsAvailable,
+      website,
+      internationalStudentRatio
     });
     return response.data;
   },

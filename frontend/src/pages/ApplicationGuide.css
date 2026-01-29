@@ -94,7 +94,7 @@
   border-radius: 16px;
   padding: 1rem;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(226, 232, 240, 0.6);
+  border: 2px solid #94a3b8;
 }
 
 .stat-item {
@@ -171,7 +171,7 @@
   padding: 1.5rem;
   margin-bottom: 1.5rem;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(226, 232, 240, 0.6);
+  border: 2px solid #94a3b8;
 }
 
 .progress-header {
@@ -271,7 +271,7 @@
   border-radius: 20px;
   padding: 1.5rem;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(226, 232, 240, 0.6);
+  border: 2px solid #94a3b8;
   margin-bottom: 2rem;
 }
 
@@ -313,6 +313,7 @@
   background: linear-gradient(135deg, rgba(79, 70, 229, 0.02) 0%, rgba(124, 58, 237, 0.02) 100%);
   opacity: 0;
   transition: opacity 0.3s ease;
+  pointer-events: none;
 }
 
 .task-card:hover {
@@ -376,11 +377,14 @@
   justify-content: center;
   color: #cbd5e1;
   background: transparent;
+  border: none;
   font-size: 1.25rem;
   flex-shrink: 0;
   border-radius: 50%;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
+  position: relative;
+  z-index: 10;
 }
 
 .task-check:hover {
@@ -593,7 +597,7 @@
   border-radius: 20px;
   padding: 1.75rem;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(226, 232, 240, 0.6);
+  border: 2px solid #94a3b8;
 }
 
 .locked-universities-section h2 {

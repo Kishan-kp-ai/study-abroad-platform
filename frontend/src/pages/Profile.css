@@ -90,7 +90,7 @@
 .btn-secondary {
   background: #f1f5f9;
   color: #64748b;
-  border: 1px solid #e2e8f0;
+  border: 2px solid #94a3b8;
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -216,8 +216,8 @@
   background: white;
   border-radius: 16px;
   padding: 1.5rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 2px solid #94a3b8;
   position: relative;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
@@ -299,7 +299,7 @@
 .form-group select {
   width: 100%;
   padding: 0.875rem 1rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #94a3b8;
   border-radius: 10px;
   font-size: 0.9375rem;
   transition: all 0.25s ease;
@@ -337,7 +337,7 @@
 
 .country-btn {
   padding: 0.625rem 1rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #94a3b8;
   border-radius: 10px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -391,7 +391,7 @@
   padding: 1rem;
   background: #fafbfc;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 2px solid #94a3b8;
   transition: all 0.25s ease;
 }
 
@@ -413,7 +413,7 @@
 .exam-item select,
 .exam-item input {
   padding: 0.75rem 0.875rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #94a3b8;
   border-radius: 8px;
   font-size: 0.875rem;
   background: white;

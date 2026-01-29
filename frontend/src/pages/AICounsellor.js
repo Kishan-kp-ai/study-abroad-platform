@@ -37,6 +37,7 @@ const AICounsellor = () => {
   const [profileCompletion, setProfileCompletion] = useState(null);
   const [shortlistedIds, setShortlistedIds] = useState([]);
   const [lockedIds, setLockedIds] = useState([]);
+  const [shortlistVisible, setShortlistVisible] = useState(false);
   const messagesEndRef = useRef(null);
 
   const shortlistedCount = (user?.shortlistedUniversities?.length || 0) + (user?.liveShortlistedUniversities?.length || 0);
@@ -139,19 +140,50 @@ What would you like to explore today?`;
 
     const content = lastMessage.content.toLowerCase();
     let prompts = [];
+    
+    // Check if shortlist is currently visible in any message
+    const isShortlistDisplayed = messages.some(msg => 
+      msg.universityRecommendations?._isShortlist
+    ) || shortlistVisible;
 
-    if (content.includes('shortlist') || content.includes('added')) {
+    // Check if this is the initial greeting message
+    const isGreeting = content.includes('study abroad counsellor') || content.includes('what would you like to explore');
+    
+    if (isGreeting) {
+      // Initial greeting - show main options based on user state
+      if (shortlistedCount === 0) {
+        prompts = [
+          { text: 'Recommend universities', icon: FiGlobe },
+          { text: 'Analyze my profile', icon: FiUser },
+          { text: 'What are my chances?', icon: FiTrendingUp }
+        ];
+      } else {
+        prompts = [
+          { text: 'Recommend universities', icon: FiGlobe },
+          { text: 'Profile Analysis', icon: FiUser },
+          { text: 'What should I do next?', icon: FiArrowRight }
+        ];
+        if (!isShortlistDisplayed) {
+          prompts.push({ text: 'Show my shortlist', icon: FiHeart });
+        }
+      }
+    } else if (content.includes('shortlist') || content.includes('added')) {
       prompts = [
-        { text: 'Show my shortlist', icon: FiHeart },
         { text: 'Recommend more universities', icon: FiGlobe },
-        { text: 'Lock a university', icon: FiTarget }
+        { text: 'What should I do next?', icon: FiArrowRight }
       ];
+      // Only add "Show my shortlist" if not already displayed
+      if (!isShortlistDisplayed) {
+        prompts.unshift({ text: 'Show my shortlist', icon: FiHeart });
+      }
     } else if (content.includes('locked') || content.includes('committed')) {
       prompts = [
-        { text: 'What should I do next?', icon: FiArrowRight },
-        { text: 'Show my shortlist', icon: FiHeart },
-        { text: 'Lock more universities', icon: FiTarget }
+        { text: 'Recommend universities', icon: FiGlobe },
+        { text: 'What should I do next?', icon: FiArrowRight }
       ];
+      if (!isShortlistDisplayed) {
+        prompts.push({ text: 'Show my shortlist', icon: FiHeart });
+      }
     } else if (content.includes('profile') || content.includes('analysis')) {
       prompts = [
         { text: 'How can I improve my profile?', icon: FiTrendingUp },
@@ -172,15 +204,17 @@ What would you like to explore today?`;
       ];
     } else if (lockedCount === 0) {
       prompts = [
-        { text: 'Help me choose universities to lock', icon: FiTarget },
-        { text: 'Compare my shortlisted universities', icon: FiGlobe },
+        { text: 'Recommend universities', icon: FiGlobe },
         { text: 'What should I do next?', icon: FiArrowRight }
       ];
+      if (!isShortlistDisplayed) {
+        prompts.push({ text: 'Show my shortlist', icon: FiHeart });
+      }
     } else {
       prompts = [
+        { text: 'Recommend universities', icon: FiGlobe },
         { text: 'What should I do next?', icon: FiArrowRight },
-        { text: 'Help with my SOP', icon: FiBookOpen },
-        { text: 'Check my application progress', icon: FiCheckCircle }
+        { text: 'Help with my SOP', icon: FiBookOpen }
       ];
     }
 
@@ -213,6 +247,11 @@ What would you like to explore today?`;
       // Add university recommendations if present
       if (response.data.universityRecommendations) {
         messageData.universityRecommendations = response.data.universityRecommendations;
+        
+        // Track if shortlist is now visible
+        if (response.data.universityRecommendations._isShortlist) {
+          setShortlistVisible(true);
+        }
       }
       
       setMessages(prev => [...prev, messageData]);
@@ -293,6 +332,7 @@ What would you like to explore today?`;
       await api.delete('/ai/history');
       const greeting = getPersonalizedGreeting();
       setMessages([{ role: 'assistant', content: greeting }]);
+      setShortlistVisible(false); // Reset shortlist visibility
       toast.success('Conversation cleared');
     } catch (error) {
       toast.error('Failed to clear history');

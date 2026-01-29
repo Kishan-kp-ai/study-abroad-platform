@@ -27,17 +27,37 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
     console.log('Onboarding request received:', req.body);
     console.log('User ID:', req.userId);
     
-    const { skipWithDefaults } = req.body;
+    const { skipWithDefaults, ...partialData } = req.body;
     
-    // If user skips onboarding, only mark as completed without filling data
+    // If user skips onboarding, save any partial data collected along with marking as complete
     if (skipWithDefaults) {
+      // Build update object with only non-empty values from partial data
+      const updateData = { onboardingCompleted: true, currentStage: 1 };
+      
+      // Save any partial data that was collected
+      const fieldsToSave = [
+        'educationLevel', 'degree', 'major', 'graduationYear', 'gpa',
+        'intendedDegree', 'fieldOfStudy', 'targetIntakeYear', 'preferredCountries',
+        'budgetMin', 'budgetMax', 'fundingPlan',
+        'ieltsStatus', 'ieltsScore', 'toeflStatus', 'toeflScore',
+        'greStatus', 'greScore', 'gmatStatus', 'gmatScore', 'sopStatus'
+      ];
+      
+      fieldsToSave.forEach(field => {
+        if (partialData[field] !== undefined && partialData[field] !== null && partialData[field] !== '') {
+          updateData[field] = partialData[field];
+        }
+      });
+      
+      console.log('Skipping onboarding with partial data:', updateData);
+      
       const user = await User.findByIdAndUpdate(
         req.userId,
-        { onboardingCompleted: true, currentStage: 1 },
+        updateData,
         { new: true }
       ).select('-password');
       
-      return res.json({ message: 'Onboarding skipped', user });
+      return res.json({ message: 'Onboarding skipped with partial data saved', user });
     }
     
     const {

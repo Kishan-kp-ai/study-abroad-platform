@@ -190,6 +190,7 @@
   padding: 2rem;
   background: #f8fafc;
   min-height: 100vh;
+  overflow: visible;
   background-image: 
     radial-gradient(circle at 100% 0%, rgba(79, 70, 229, 0.03) 0%, transparent 50%),
     radial-gradient(circle at 0% 100%, rgba(55, 48, 163, 0.03) 0%, transparent 50%),

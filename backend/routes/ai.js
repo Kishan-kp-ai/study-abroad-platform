@@ -34,26 +34,44 @@ async function processUserActions(message, user, universities) {
     
     console.log('Found in local DB:', uni ? uni.name : 'None');
     
-    // If not found in local DB, search live universities
+    // If not found in local DB, search MongoDB first, then live API
     if (!uni || !uni._id) {
       const searchQuery = extractUniversityName(message);
       console.log('Extracted search query:', searchQuery);
       
       if (searchQuery) {
+        // First try MongoDB database (faster and has full details)
         try {
-          console.log('Searching live universities for:', searchQuery);
-          const liveResults = await searchLiveUniversities(searchQuery);
-          console.log('Live results count:', liveResults?.length || 0);
+          const dbResults = await University.find({
+            name: { $regex: searchQuery, $options: 'i' }
+          }).limit(5);
           
-          if (liveResults && liveResults.length > 0) {
-            // Find best match
+          if (dbResults && dbResults.length > 0) {
             const lowerQuery = searchQuery.toLowerCase();
-            uni = liveResults.find(u => u.name.toLowerCase().includes(lowerQuery)) || liveResults[0];
-            isLiveUni = true;
-            console.log('Selected university:', uni.name);
+            uni = dbResults.find(u => u.name.toLowerCase().includes(lowerQuery)) || dbResults[0];
+            console.log('Found in MongoDB:', uni.name);
           }
-        } catch (err) {
-          console.error('Error searching live universities:', err.message);
+        } catch (dbErr) {
+          console.error('Error searching MongoDB:', dbErr.message);
+        }
+        
+        // If still not found, try live API
+        if (!uni) {
+          try {
+            console.log('Searching live universities for:', searchQuery);
+            const liveResults = await searchLiveUniversities(searchQuery);
+            console.log('Live results count:', liveResults?.length || 0);
+            
+            if (liveResults && liveResults.length > 0) {
+              // Find best match
+              const lowerQuery = searchQuery.toLowerCase();
+              uni = liveResults.find(u => u.name.toLowerCase().includes(lowerQuery)) || liveResults[0];
+              isLiveUni = true;
+              console.log('Selected university:', uni.name);
+            }
+          } catch (err) {
+            console.error('Error searching live universities:', err.message);
+          }
         }
       }
     }
@@ -86,12 +104,20 @@ async function processUserActions(message, user, universities) {
 
 Would you like me to change its category, or would you like to explore other universities?`;
         } else {
-          // Add to live shortlist
+          // Add to live shortlist with full details
           user.liveShortlistedUniversities.push({ 
             universityId: universityId,
             universityName: uni.name,
             country: uni.country,
+            city: uni.city || '',
             category: category,
+            tuitionFee: uni.tuitionFee || 0,
+            livingCostPerYear: uni.livingCostPerYear || 0,
+            ranking: uni.ranking || null,
+            acceptanceRate: uni.acceptanceRate || 50,
+            scholarshipsAvailable: uni.scholarshipsAvailable || false,
+            website: uni.website || null,
+            internationalStudentRatio: uni.internationalStudentRatio || 15,
             shortlistedAt: new Date()
           });
           await user.save();
@@ -167,19 +193,37 @@ I can search for any university worldwide!`;
     let uni = findUniversityInMessage(message, universities);
     let isLiveUni = false;
     
-    // If not found in local DB, search live universities
+    // If not found in local DB, search MongoDB first, then live API
     if (!uni || !uni._id) {
       const searchQuery = extractUniversityName(message);
       if (searchQuery) {
+        // First try MongoDB database
         try {
-          const liveResults = await searchLiveUniversities(searchQuery);
-          if (liveResults && liveResults.length > 0) {
+          const dbResults = await University.find({
+            name: { $regex: searchQuery, $options: 'i' }
+          }).limit(5);
+          
+          if (dbResults && dbResults.length > 0) {
             const lowerQuery = searchQuery.toLowerCase();
-            uni = liveResults.find(u => u.name.toLowerCase().includes(lowerQuery)) || liveResults[0];
-            isLiveUni = true;
+            uni = dbResults.find(u => u.name.toLowerCase().includes(lowerQuery)) || dbResults[0];
+            console.log('Found in MongoDB for lock:', uni.name);
           }
-        } catch (err) {
-          console.error('Error searching live universities:', err);
+        } catch (dbErr) {
+          console.error('Error searching MongoDB:', dbErr.message);
+        }
+        
+        // If still not found, try live API
+        if (!uni) {
+          try {
+            const liveResults = await searchLiveUniversities(searchQuery);
+            if (liveResults && liveResults.length > 0) {
+              const lowerQuery = searchQuery.toLowerCase();
+              uni = liveResults.find(u => u.name.toLowerCase().includes(lowerQuery)) || liveResults[0];
+              isLiveUni = true;
+            }
+          } catch (err) {
+            console.error('Error searching live universities:', err);
+          }
         }
       }
     }
@@ -202,11 +246,19 @@ You're committed to applying here. Check the **Application Guide** tab for your 
 
 Is there another university you'd like to lock?`;
       } else {
-        // Lock the university (use live array)
+        // Lock the university with full details
         user.liveLockedUniversities.push({ 
           universityId: universityId,
           universityName: uni.name,
           country: uni.country,
+          city: uni.city || '',
+          tuitionFee: uni.tuitionFee || 0,
+          livingCostPerYear: uni.livingCostPerYear || 0,
+          ranking: uni.ranking || null,
+          acceptanceRate: uni.acceptanceRate || 50,
+          scholarshipsAvailable: uni.scholarshipsAvailable || false,
+          website: uni.website || null,
+          internationalStudentRatio: uni.internationalStudentRatio || 15,
           lockedAt: new Date()
         });
         
@@ -217,7 +269,15 @@ Is there another university you'd like to lock?`;
             universityId: universityId,
             universityName: uni.name,
             country: uni.country,
+            city: uni.city || '',
             category: 'target',
+            tuitionFee: uni.tuitionFee || 0,
+            livingCostPerYear: uni.livingCostPerYear || 0,
+            ranking: uni.ranking || null,
+            acceptanceRate: uni.acceptanceRate || 50,
+            scholarshipsAvailable: uni.scholarshipsAvailable || false,
+            website: uni.website || null,
+            internationalStudentRatio: uni.internationalStudentRatio || 15,
             shortlistedAt: new Date()
           });
         }
@@ -679,19 +739,33 @@ async function buildSystemContext(user, universities) {
   
   const tasks = await Task.find({ userId: user._id, completed: false });
   
-  return `You are an AI Study Abroad Counsellor. You help students make informed decisions about studying abroad.
+  // Determine application readiness
+  const readinessIndicators = [];
+  if (user.ieltsScore || user.toeflScore) readinessIndicators.push('English proficiency test completed');
+  if (user.greScore || user.gmatScore) readinessIndicators.push('Standardized test completed');
+  if (user.sopStatus === 'Completed' || user.sopStatus === 'completed') readinessIndicators.push('SOP ready');
+  if (user.currentStage >= 3) readinessIndicators.push('In finalizing stage');
+  
+  const readinessLevel = readinessIndicators.length >= 3 ? 'HIGH' : 
+                         readinessIndicators.length >= 2 ? 'MEDIUM' : 'LOW';
+
+  return `You are an AI Study Abroad Counsellor. You help students make PERSONALIZED decisions about studying abroad based STRICTLY on their profile.
+
+=== CRITICAL: PERSONALIZATION REQUIREMENTS ===
+ALL university recommendations MUST be based on this specific student's profile. NEVER give generic or random recommendations.
+You MUST analyze and match universities using these profile factors:
 
 CURRENT USER PROFILE:
 - Name: ${user.fullName}
 - Education: ${user.educationLevel} in ${user.major || 'Not specified'}
-- Degree: ${user.degree}
-- GPA: ${user.gpa || 'Not provided'}
+- Current Degree: ${user.degree}
+- GPA: ${user.gpa || 'Not provided'} (Use this to determine academic competitiveness)
 - Graduation Year: ${user.graduationYear}
-- Target Degree: ${user.intendedDegree}
-- Field of Study: ${user.fieldOfStudy}
+- Target Degree: ${user.intendedDegree} (ONLY recommend programs for this degree level)
+- Field of Study: ${user.fieldOfStudy} (ONLY recommend universities with strong programs in this field)
 - Target Intake: ${user.targetIntakeYear}
-- Preferred Countries: ${user.preferredCountries?.join(', ') || 'Not specified'}
-- Budget: $${user.budgetMin || 0} - $${user.budgetMax || 0} per year
+- Preferred Countries: ${user.preferredCountries?.join(', ') || 'Not specified'} (ONLY recommend from these countries)
+- Budget: $${user.budgetMin || 0} - $${user.budgetMax || 0} per year (CRITICAL: Filter out universities exceeding budget)
 - Funding Plan: ${user.fundingPlan}
 - IELTS: ${user.ieltsStatus} ${user.ieltsScore ? `(Score: ${user.ieltsScore})` : ''}
 - TOEFL: ${user.toeflStatus} ${user.toeflScore ? `(Score: ${user.toeflScore})` : ''}
@@ -699,6 +773,7 @@ CURRENT USER PROFILE:
 - GMAT: ${user.gmatStatus} ${user.gmatScore ? `(Score: ${user.gmatScore})` : ''}
 - SOP Status: ${user.sopStatus}
 - Current Stage: ${user.currentStage} (1=Profile Building, 2=Discovering Universities, 3=Finalizing, 4=Application Prep)
+- Application Readiness: ${readinessLevel} (${readinessIndicators.join(', ') || 'Just starting'})
 
 SHORTLISTED UNIVERSITIES:
 ${allShortlisted.join('\n') || 'None yet'}
@@ -709,19 +784,51 @@ ${allLocked.join('\n') || 'None yet'}
 PENDING TASKS:
 ${tasks.map(t => `- ${t.title} (${t.priority} priority)`).join('\n') || 'No pending tasks'}
 
+=== RECOMMENDATION RULES (MANDATORY) ===
+When recommending universities, you MUST:
+
+1. **Match Field of Study**: ONLY recommend universities known for ${user.fieldOfStudy || 'the student\'s field'}
+2. **Match Degree Level**: ONLY recommend ${user.intendedDegree || 'appropriate'} programs
+3. **Respect Budget**: Total cost (tuition + living) MUST be within $${user.budgetMax || 'their budget'}/year
+   - Flag universities that exceed budget as RISKS
+4. **Consider GPA**: 
+   - If GPA is ${user.gpa || 'unknown'}, categorize as:
+     - DREAM: Universities with avg admitted GPA 0.3+ higher than student's
+     - TARGET: Universities with avg admitted GPA within ±0.2 of student's
+     - SAFE: Universities with avg admitted GPA 0.3+ lower than student's
+5. **Preferred Countries Only**: ONLY recommend from: ${user.preferredCountries?.join(', ') || 'their preferred countries'}
+6. **Explain Fit**: For EACH recommendation, explain:
+   - WHY it fits their profile (specific reasons)
+   - RISKS or concerns (GPA gap, budget stretch, competitiveness)
+   - What makes it Dream/Target/Safe for THIS student
+
+=== RESPONSE FORMAT FOR RECOMMENDATIONS ===
+When recommending universities, structure your response as:
+
+"Based on your profile (${user.intendedDegree} in ${user.fieldOfStudy}, GPA: ${user.gpa || 'N/A'}, Budget: $${user.budgetMax || 'N/A'}/year):
+
+🎯 **DREAM Schools** (Reach - Competitive for your profile):
+- [University Name]: Why it's a dream + specific risks
+
+🎯 **TARGET Schools** (Good Match - Strong chance):
+- [University Name]: Why it matches your profile
+
+🎯 **SAFE Schools** (Backup - High acceptance likelihood):
+- [University Name]: Why it's safe for you"
+
 YOUR CAPABILITIES:
 1. Analyze profile strengths and gaps
-2. Recommend universities (Dream/Target/Safe categories) - ONLY from Live Search results
-3. Explain why universities fit or have risks based on user's GPA, budget, and preferences
-4. Suggest actions like shortlisting, locking universities
-5. Create and suggest to-do tasks
-6. Guide through each stage of the journey
+2. Recommend universities (Dream/Target/Safe) - STRICTLY based on profile match
+3. Explain fit and risks for each recommendation
+4. Suggest shortlisting/locking actions
+5. Create and suggest tasks
+6. Guide through each stage
 
 IMPORTANT RULES:
-- You must guide decisions, not just answer questions. Be proactive in recommending next steps.
-- ONLY recommend universities that are available in the Live Search tab. Do NOT invent or suggest universities outside of the live-fetched list.
-- When user asks for recommendations, direct them to the Live Search tab or use the "recommend universities" command which fetches live data.
-- Base all university recommendations on the user's profile (GPA, budget, preferred countries, intended degree).
+- NEVER recommend universities randomly or generically
+- ALWAYS explain why each university fits or doesn't fit this specific student
+- ONLY recommend from Live Search results for preferred countries
+- Be honest about risks and gaps in their profile
 
 When recommending actions, format them as:
 [ACTION: SHORTLIST university_name category]
@@ -1239,6 +1346,9 @@ async function getLiveUniversityRecommendationsData(user) {
   const firstName = user.fullName?.split(' ')[0] || 'there';
   const countries = user.preferredCountries || ['United States'];
   const userGPA = parseFloat(user.gpa) || 0;
+  const userBudget = user.budgetMax || 50000;
+  const userDegree = user.intendedDegree || 'Master\'s';
+  const userField = user.fieldOfStudy || 'Not specified';
   
   try {
     // Fetch live universities for user's preferred countries
@@ -1252,102 +1362,232 @@ async function getLiveUniversityRecommendationsData(user) {
       };
     }
     
+    // Helper function to check if degree matches user's intended degree
+    const degreeMatches = (programDegree, userIntendedDegree) => {
+      if (!programDegree || !userIntendedDegree) return false;
+      
+      const program = programDegree.toLowerCase().trim();
+      const intended = userIntendedDegree.toLowerCase().trim();
+      
+      // MBA specific matching (check first to avoid confusion with Master's)
+      if (intended === 'mba' || intended === "master's in business administration") {
+        return program === 'mba' || program.includes('mba');
+      }
+      
+      // PhD matching (check before Master's to avoid confusion)
+      if (intended.includes('phd') || intended.includes('doctor') || intended.includes('doctorate')) {
+        return program === 'phd' || program.includes('phd') || program.includes('doctor');
+      }
+      
+      // Master's degree matching (exclude MBA and PhD)
+      if (intended.includes('master') || intended === 'ms' || intended === 'msc' || intended === 'ma') {
+        // Must match Master's but NOT PhD or MBA
+        const isMasters = program.includes('master') || program === 'ms' || program === 'msc' || 
+                          program === 'ma' || program.includes("master's");
+        const isPhD = program.includes('phd') || program.includes('doctor');
+        const isMBA = program === 'mba';
+        return isMasters && !isPhD && !isMBA;
+      }
+      
+      // Bachelor's degree matching
+      if (intended.includes('bachelor') || intended === 'bs' || intended === 'bsc' || intended === 'ba') {
+        return program.includes('bachelor') || program === 'bs' || program === 'bsc' || 
+               program === 'ba' || program.includes("bachelor's");
+      }
+      
+      return program.includes(intended) || intended.includes(program);
+    };
+    
+    // Helper function to check if field of study matches
+    const fieldMatches = (program, userFieldOfStudy) => {
+      if (!userFieldOfStudy || userFieldOfStudy === 'Not specified') return true;
+      
+      const userField = userFieldOfStudy.toLowerCase().trim();
+      
+      // Check against program field
+      if (program.field && program.field.toLowerCase().includes(userField)) return true;
+      if (userField.includes(program.field?.toLowerCase())) return true;
+      
+      // Check against program name
+      if (program.name && program.name.toLowerCase().includes(userField)) return true;
+      
+      // Check against field aliases if available
+      if (program.fieldAliases && Array.isArray(program.fieldAliases)) {
+        return program.fieldAliases.some(alias => 
+          alias.toLowerCase().includes(userField) || userField.includes(alias.toLowerCase())
+        );
+      }
+      
+      return false;
+    };
+    
+    // First, filter universities to only those offering the user's intended degree AND field
+    const filteredUniversities = liveUniversities.filter(uni => {
+      if (!uni.programs || uni.programs.length === 0) {
+        // If no program info, include but will be scored lower
+        return true;
+      }
+      
+      // Check if ANY program matches BOTH the user's intended degree AND field of study
+      const hasMatchingProgram = uni.programs.some(p => {
+        const degreeMatch = degreeMatches(p.degree, userDegree);
+        const fieldMatch = fieldMatches(p, userField);
+        return degreeMatch && fieldMatch;
+      });
+      
+      return hasMatchingProgram;
+    });
+    
+    // If no universities match both degree and field, fall back to degree-only filter
+    const universitiesToScore = filteredUniversities.length > 0 ? filteredUniversities : 
+      liveUniversities.filter(uni => {
+        if (!uni.programs || uni.programs.length === 0) return true;
+        return uni.programs.some(p => degreeMatches(p.degree, userDegree));
+      });
+    
     // Score and categorize each university based on user profile
-    const scoredUniversities = liveUniversities.map(uni => {
+    const scoredUniversities = universitiesToScore.map(uni => {
       let fitScore = 0;
       let reasons = [];
       let risks = [];
       
-      // Budget analysis
+      // Budget analysis - CRITICAL factor
       const totalCost = (uni.tuitionFee || 25000) + (uni.livingCostPerYear || 15000);
+      const budgetDiff = userBudget - totalCost;
       
-      if (user.budgetMax && totalCost <= user.budgetMax) {
-        fitScore += 25;
-        reasons.push('Within your budget');
-      } else if (user.budgetMax && totalCost <= user.budgetMax * 1.2) {
-        fitScore += 15;
-        reasons.push('Slightly above budget');
-      } else if (user.budgetMax) {
-        risks.push('May exceed budget');
+      if (budgetDiff >= 10000) {
+        fitScore += 30;
+        reasons.push(`Well within budget ($${totalCost.toLocaleString()}/yr vs your $${userBudget.toLocaleString()})`);
+      } else if (budgetDiff >= 0) {
+        fitScore += 20;
+        reasons.push(`Within budget ($${totalCost.toLocaleString()}/yr)`);
+      } else if (budgetDiff >= -5000) {
+        fitScore += 10;
+        risks.push(`Slightly over budget by $${Math.abs(budgetDiff).toLocaleString()}/yr`);
+      } else {
+        risks.push(`Exceeds budget by $${Math.abs(budgetDiff).toLocaleString()}/yr - may need additional funding`);
       }
       
-      // GPA/Academic fit analysis
-      const hasMatchingProgram = uni.programs?.some(p => {
-        if (p.degree?.toLowerCase() === user.intendedDegree?.toLowerCase()) {
-          fitScore += 15;
-          if (p.requirements?.minGPA) {
-            if (userGPA >= p.requirements.minGPA + 0.3) {
-              fitScore += 25;
-              reasons.push('GPA exceeds requirements');
-            } else if (userGPA >= p.requirements.minGPA) {
-              fitScore += 15;
-              reasons.push('GPA meets requirements');
-            } else {
-              risks.push(`Min GPA: ${p.requirements.minGPA}`);
-            }
-          } else {
-            fitScore += 10;
-          }
-          return true;
-        }
-        return false;
-      });
+      // Filter programs to only matching degree level AND field of study
+      const matchingPrograms = uni.programs?.filter(p => 
+        degreeMatches(p.degree, userDegree) && fieldMatches(p, userField)
+      ) || [];
       
-      if (!hasMatchingProgram && user.intendedDegree) {
-        fitScore += 10;
+      // GPA/Academic fit analysis - only for matching programs
+      let hasMatchingProgram = false;
+      if (matchingPrograms.length > 0) {
+        hasMatchingProgram = true;
+        fitScore += 25;
+        
+        // Show the specific matching program
+        const matchedProgram = matchingPrograms[0];
+        reasons.push(`Offers ${matchedProgram.name || `${userDegree} in ${userField}`}`);
+        
+        // Check GPA requirements from matching programs
+        const programWithGPA = matchingPrograms.find(p => p.requirements?.minGPA);
+        if (programWithGPA && programWithGPA.requirements?.minGPA) {
+          const gpaGap = userGPA - programWithGPA.requirements.minGPA;
+          if (gpaGap >= 0.5) {
+            fitScore += 30;
+            reasons.push(`Your GPA (${userGPA}) strongly exceeds min requirement (${programWithGPA.requirements.minGPA})`);
+          } else if (gpaGap >= 0.2) {
+            fitScore += 20;
+            reasons.push(`Your GPA (${userGPA}) comfortably meets requirement (${programWithGPA.requirements.minGPA})`);
+          } else if (gpaGap >= 0) {
+            fitScore += 10;
+            reasons.push(`Your GPA (${userGPA}) meets min requirement (${programWithGPA.requirements.minGPA})`);
+          } else {
+            risks.push(`Your GPA (${userGPA}) is below min requirement (${programWithGPA.requirements.minGPA}) - compensate with strong SOP/LORs`);
+          }
+        } else {
+          fitScore += 10;
+        }
+      } else if (!uni.programs || uni.programs.length === 0) {
+        // No program info available - neutral score
+        fitScore += 5;
+        reasons.push('Program details not available - verify on university website');
+      } else {
+        // Has programs but none match user's field - this shouldn't happen after filtering
+        risks.push(`Verify ${userField} program availability on university website`);
       }
       
       // Acceptance rate analysis
       if (uni.acceptanceRate) {
         if (uni.acceptanceRate > 60) {
-          fitScore += 20;
-          reasons.push('High acceptance rate');
-        } else if (uni.acceptanceRate > 30) {
-          fitScore += 10;
-          reasons.push('Moderate acceptance');
-        } else if (uni.acceptanceRate < 15) {
-          risks.push('Highly competitive');
+          fitScore += 25;
+          reasons.push(`High acceptance rate (${uni.acceptanceRate}%)`);
+        } else if (uni.acceptanceRate > 40) {
+          fitScore += 15;
+          reasons.push(`Moderate acceptance rate (${uni.acceptanceRate}%)`);
+        } else if (uni.acceptanceRate > 20) {
+          fitScore += 5;
+          risks.push(`Competitive admission (${uni.acceptanceRate}% acceptance)`);
+        } else {
+          risks.push(`Highly selective (${uni.acceptanceRate}% acceptance) - strong profile needed`);
         }
-      }
-      
-      // Country preference bonus
-      if (countries.includes(uni.country)) {
-        fitScore += 5;
       }
       
       // Categorize based on fit score
       let category;
-      if (fitScore >= 60) {
+      let categoryReason;
+      if (fitScore >= 70) {
         category = 'safe';
-      } else if (fitScore >= 35) {
+        categoryReason = 'High match with your profile';
+      } else if (fitScore >= 40) {
         category = 'target';
+        categoryReason = 'Good match - solid chance of admission';
       } else {
         category = 'dream';
+        categoryReason = 'Reach school - competitive for your profile';
       }
+      
+      // Get the matched program to display
+      const matchedProgram = matchingPrograms.length > 0 ? matchingPrograms[0] : null;
       
       return {
         ...uni,
         fitScore,
         category,
+        categoryReason,
         reasons,
-        risks
+        risks,
+        estimatedCost: totalCost,
+        matchedProgram: matchedProgram ? {
+          name: matchedProgram.name,
+          degree: matchedProgram.degree,
+          field: matchedProgram.field
+        } : null,
+        // Override programs to only show matching ones
+        programs: matchingPrograms
       };
     });
     
-    // Sort and slice by category
+    // Sort and slice by category - prioritize best fits within each category
     const dreamUnis = scoredUniversities.filter(u => u.category === 'dream').sort((a, b) => b.fitScore - a.fitScore).slice(0, 3);
     const targetUnis = scoredUniversities.filter(u => u.category === 'target').sort((a, b) => b.fitScore - a.fitScore).slice(0, 4);
     const safeUnis = scoredUniversities.filter(u => u.category === 'safe').sort((a, b) => b.fitScore - a.fitScore).slice(0, 3);
     
-    const gpaAdvice = userGPA >= 3.7 
-      ? 'Your strong GPA gives you a fighting chance at dream schools!' 
-      : userGPA >= 3.0 
-        ? 'A compelling SOP and strong recommendations will strengthen your dream school applications.'
-        : 'Focus on target and safe schools while highlighting your unique strengths in your SOP.';
+    // Personalized advice based on profile
+    let gpaAdvice;
+    if (userGPA >= 3.7) {
+      gpaAdvice = `With your strong GPA of ${userGPA}, you're competitive for dream schools! Focus on crafting a compelling SOP that showcases your unique strengths.`;
+    } else if (userGPA >= 3.3) {
+      gpaAdvice = `Your GPA of ${userGPA} is solid for target schools. Strong recommendation letters and a focused SOP can help you reach dream schools.`;
+    } else if (userGPA >= 3.0) {
+      gpaAdvice = `With a GPA of ${userGPA}, prioritize target and safe schools. Highlight relevant experience, projects, and skills in your application.`;
+    } else {
+      gpaAdvice = `Focus on safe schools and build a strong application package. Work experience, certifications, and a compelling personal story can compensate.`;
+    }
+    
+    // Add budget-specific advice
+    const avgCost = scoredUniversities.reduce((sum, u) => sum + u.estimatedCost, 0) / scoredUniversities.length;
+    if (userBudget < avgCost) {
+      gpaAdvice += ` Consider scholarship opportunities as some universities may exceed your budget.`;
+    }
     
     return {
       error: false,
-      intro: `${firstName}, here are universities from **Live Search** matched to your profile for **${user.intendedDegree} in ${user.fieldOfStudy}**:`,
+      intro: `${firstName}, based on your profile (**${userDegree} in ${userField}**, GPA: **${userGPA || 'N/A'}**, Budget: **$${userBudget.toLocaleString()}/yr**, Countries: **${countries.join(', ')}**), here are my personalized recommendations:`,
       dream: dreamUnis,
       target: targetUnis,
       safe: safeUnis,
@@ -1356,6 +1596,8 @@ async function getLiveUniversityRecommendationsData(user) {
         gpa: user.gpa || 'Not provided',
         budgetMin: user.budgetMin || 0,
         budgetMax: user.budgetMax || 0,
+        intendedDegree: userDegree,
+        fieldOfStudy: userField,
         countries: countries
       }
     };
@@ -1390,15 +1632,49 @@ async function getShortlistedUniversitiesData(user) {
     const targetUnis = [];
     const safeUnis = [];
     
-    // Use stored shortlist data directly - no need to search each university
+    // Fetch full university data for each shortlisted university
     for (const shortlisted of liveShortlisted) {
-      const uniData = {
+      let uniData = {
         id: shortlisted.universityId,
         name: shortlisted.universityName,
         country: shortlisted.country,
+        city: shortlisted.city || '',
         category: shortlisted.category,
-        shortlistedAt: shortlisted.shortlistedAt
+        shortlistedAt: shortlisted.shortlistedAt,
+        tuitionFee: 0,
+        livingCostPerYear: 0,
+        ranking: null,
+        acceptanceRate: 50,
+        scholarshipsAvailable: false
       };
+      
+      // Try to fetch full details from live search
+      try {
+        const liveResults = await searchLiveUniversities(shortlisted.universityName);
+        if (liveResults && liveResults.length > 0) {
+          // Find exact match or best match
+          const match = liveResults.find(u => 
+            u.name.toLowerCase() === shortlisted.universityName.toLowerCase() ||
+            u.id === shortlisted.universityId
+          ) || liveResults[0];
+          
+          if (match) {
+            uniData = {
+              ...uniData,
+              city: match.city || uniData.city,
+              tuitionFee: match.tuitionFee || 0,
+              livingCostPerYear: match.livingCostPerYear || 0,
+              ranking: match.ranking || null,
+              acceptanceRate: match.acceptanceRate || 50,
+              scholarshipsAvailable: match.scholarshipsAvailable || false,
+              website: match.website || null,
+              programs: match.programs || []
+            };
+          }
+        }
+      } catch (fetchError) {
+        console.log(`Could not fetch details for ${shortlisted.universityName}:`, fetchError.message);
+      }
       
       // Sort into categories
       if (shortlisted.category === 'dream') {

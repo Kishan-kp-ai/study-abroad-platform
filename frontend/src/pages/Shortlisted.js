@@ -15,9 +15,69 @@ import {
   FiX,
   FiAlertCircle,
   FiCheckCircle,
-  FiArrowRight
+  FiArrowRight,
+  FiDollarSign,
+  FiAward,
+  FiAlertTriangle,
+  FiTrendingUp
 } from 'react-icons/fi';
 import './Shortlisted.css';
+
+// Country-based default costs (fallback when API doesn't return data)
+const COUNTRY_DEFAULTS = {
+  'United States': { tuition: 35000, living: 18000 },
+  'United Kingdom': { tuition: 28000, living: 15000 },
+  'Canada': { tuition: 22000, living: 14000 },
+  'Australia': { tuition: 30000, living: 16000 },
+  'Germany': { tuition: 500, living: 12000 },
+  'France': { tuition: 3000, living: 12000 },
+  'Netherlands': { tuition: 15000, living: 14000 },
+  'Ireland': { tuition: 20000, living: 14000 },
+  'Singapore': { tuition: 35000, living: 18000 },
+  'default': { tuition: 25000, living: 15000 }
+};
+
+// Helper functions for card display
+const calculateTotalCost = (uni) => {
+  const tuition = uni.tuitionFee || 0;
+  const living = uni.livingCostPerYear || 0;
+  
+  // If both are 0, use country defaults
+  if (tuition === 0 && living === 0) {
+    const defaults = COUNTRY_DEFAULTS[uni.country] || COUNTRY_DEFAULTS['default'];
+    return defaults.tuition + defaults.living;
+  }
+  
+  return tuition + living;
+};
+
+const getRiskLevel = (uni) => {
+  const acceptanceRate = uni.acceptanceRate || 50;
+  const ranking = uni.ranking || 100;
+  
+  if (acceptanceRate < 15 || ranking < 30) {
+    return { level: 'high', label: 'High Risk', color: '#dc2626' };
+  } else if (acceptanceRate < 40 || ranking < 80) {
+    return { level: 'medium', label: 'Medium Risk', color: '#f59e0b' };
+  }
+  return { level: 'low', label: 'Low Risk', color: '#10b981' };
+};
+
+const getAcceptanceLikelihood = (uni) => {
+  const acceptanceRate = uni.acceptanceRate || 50;
+  const internationalRatio = uni.internationalStudentRatio || 15;
+  
+  let score = acceptanceRate;
+  if (internationalRatio > 25) score += 10;
+  if (uni.scholarshipsAvailable) score += 5;
+  
+  if (score >= 60) {
+    return { level: 'high', label: 'High Chance', color: '#10b981' };
+  } else if (score >= 35) {
+    return { level: 'medium', label: 'Medium Chance', color: '#f59e0b' };
+  }
+  return { level: 'low', label: 'Low Chance', color: '#dc2626' };
+};
 
 const Shortlisted = () => {
   const [shortlisted, setShortlisted] = useState([]);
@@ -31,6 +91,8 @@ const Shortlisted = () => {
     try {
       setLoading(true);
       const data = await liveUniversityApi.getMySelections();
+      
+      // Use stored details directly - no API calls needed
       setShortlisted(data.shortlisted || []);
       setLocked(data.locked || []);
     } catch (error) {
@@ -242,71 +304,135 @@ const Shortlisted = () => {
         <div className="universities-list">
           {activeList.map((uni) => (
             <div key={uni.universityId} className="university-card">
-              <div className="card-main">
-                <div className="university-info">
-                  <h3>{uni.universityName}</h3>
-                  <div className="university-meta">
-                    <span className="location">
-                      <FiMapPin /> {uni.country}
+              {/* Category Badge */}
+              {activeTab === 'shortlisted' && uni.category && (
+                <div 
+                  className="card-category-badge"
+                  style={{ backgroundColor: getCategoryColor(uni.category) }}
+                >
+                  {uni.category.toUpperCase()}
+                </div>
+              )}
+              {activeTab === 'locked' && (
+                <div className="card-category-badge locked-category">
+                  <FiLock /> LOCKED
+                </div>
+              )}
+
+              {/* Card Header */}
+              <div className="card-header">
+                <h3>{uni.universityName}</h3>
+                <div className="card-header-actions">
+                  {uni.website && (
+                    <a 
+                      href={uni.website} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="website-link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <FiExternalLink />
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Meta Info */}
+              <div className="card-meta">
+                <span className="location">
+                  <FiMapPin /> {uni.city ? `${uni.city}, ` : ''}{uni.country}
+                </span>
+                {uni.ranking && (
+                  <span className="ranking">
+                    <FiAward /> Rank #{uni.ranking}
+                  </span>
+                )}
+              </div>
+
+              {/* Cost Section */}
+              {(uni.tuitionFee || uni.livingCostPerYear) ? (
+                <div className="card-cost-section">
+                  <div className="cost-main">
+                    <span className="cost-label">
+                      <FiDollarSign /> Total Cost/Year
                     </span>
-                    {activeTab === 'shortlisted' && uni.category && (
-                      <span 
-                        className="category-badge"
-                        style={{ backgroundColor: getCategoryColor(uni.category) }}
-                      >
-                        {uni.category}
-                      </span>
-                    )}
-                    {activeTab === 'locked' && (
-                      <span className="locked-badge">
-                        <FiCheckCircle /> Locked
-                      </span>
-                    )}
+                    <span className="cost-value">${calculateTotalCost(uni).toLocaleString()}</span>
                   </div>
-                  <span className="added-date">
-                    Added {new Date(uni.shortlistedAt || uni.lockedAt).toLocaleDateString()}
+                </div>
+              ) : null}
+
+              {/* Status Badges */}
+              <div className="card-status-row">
+                <div className="status-item">
+                  <span className="status-label"><FiAlertTriangle /> Risk Level</span>
+                  <span 
+                    className="status-badge"
+                    style={{ backgroundColor: getRiskLevel(uni).color }}
+                  >
+                    {getRiskLevel(uni).label}
                   </span>
                 </div>
-
-                <div className="card-actions">
-                  {activeTab === 'shortlisted' && (
-                    <>
-                      {!isLocked(uni.universityId) ? (
-                        <button 
-                          className="action-btn lock-btn"
-                          onClick={() => handleLock(uni)}
-                          title="Lock university"
-                        >
-                          <FiLock /> Lock
-                        </button>
-                      ) : (
-                        <button 
-                          className="action-btn locked"
-                          title="Already locked"
-                          disabled
-                        >
-                          <FiCheckCircle /> Locked
-                        </button>
-                      )}
-                      <button 
-                        className="action-btn remove-btn"
-                        onClick={() => handleRemoveFromShortlist(uni.universityId, uni.universityName)}
-                        title="Remove from shortlist"
-                      >
-                        <FiTrash2 />
-                      </button>
-                    </>
-                  )}
-                  {activeTab === 'locked' && (
-                    <button 
-                      className="action-btn unlock-btn"
-                      onClick={() => handleUnlock(uni.universityId, uni.universityName)}
-                      title="Unlock university"
-                    >
-                      <FiUnlock /> Unlock
-                    </button>
-                  )}
+                <div className="status-item">
+                  <span className="status-label"><FiTrendingUp /> Acceptance</span>
+                  <span 
+                    className="status-badge"
+                    style={{ backgroundColor: getAcceptanceLikelihood(uni).color }}
+                  >
+                    {getAcceptanceLikelihood(uni).label}
+                  </span>
                 </div>
+              </div>
+
+              {/* Scholarship Info */}
+              <div className={`scholarship-indicator ${uni.scholarshipsAvailable ? 'available' : 'unavailable'}`}>
+                <FiCheckCircle />
+                <span>{uni.scholarshipsAvailable ? 'Scholarships Available' : 'No Scholarships'}</span>
+              </div>
+
+              {/* Actions */}
+              <div className="card-actions">
+                {activeTab === 'shortlisted' && (
+                  <>
+                    {!isLocked(uni.universityId) ? (
+                      <button 
+                        className="action-btn lock-btn"
+                        onClick={() => handleLock(uni)}
+                        title="Lock university"
+                      >
+                        <FiLock /> Lock
+                      </button>
+                    ) : (
+                      <button 
+                        className="action-btn locked"
+                        title="Already locked"
+                        disabled
+                      >
+                        <FiCheckCircle /> Locked
+                      </button>
+                    )}
+                    <button 
+                      className="action-btn remove-btn"
+                      onClick={() => handleRemoveFromShortlist(uni.universityId, uni.universityName)}
+                      title="Remove from shortlist"
+                    >
+                      <FiTrash2 />
+                    </button>
+                  </>
+                )}
+                {activeTab === 'locked' && (
+                  <button 
+                    className="action-btn unlock-btn"
+                    onClick={() => handleUnlock(uni.universityId, uni.universityName)}
+                    title="Unlock university"
+                  >
+                    <FiUnlock /> Unlock
+                  </button>
+                )}
+              </div>
+
+              {/* Added Date */}
+              <div className="added-date">
+                Added {new Date(uni.shortlistedAt || uni.lockedAt).toLocaleDateString()}
               </div>
             </div>
           ))}

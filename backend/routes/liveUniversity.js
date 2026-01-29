@@ -1,5 +1,6 @@
 const express = require('express');
 const User = require('../models/User');
+const University = require('../models/University');
 const authMiddleware = require('../middleware/auth');
 const { 
   fetchUniversitiesByCountry, 
@@ -233,7 +234,20 @@ router.get('/for-me', authMiddleware, async (req, res) => {
 // Shortlist a live university
 router.post('/shortlist', authMiddleware, async (req, res) => {
   try {
-    const { universityId, universityName, country, category = 'target' } = req.body;
+    const { 
+      universityId, 
+      universityName, 
+      country, 
+      category = 'target',
+      city,
+      tuitionFee,
+      livingCostPerYear,
+      ranking,
+      acceptanceRate,
+      scholarshipsAvailable,
+      website,
+      internationalStudentRatio
+    } = req.body;
     
     const user = await User.findById(req.userId);
     
@@ -252,8 +266,16 @@ router.post('/shortlist', authMiddleware, async (req, res) => {
     user.liveShortlistedUniversities.push({ 
       universityId, 
       universityName, 
-      country, 
+      country,
+      city: city || '',
       category,
+      tuitionFee: tuitionFee || 0,
+      livingCostPerYear: livingCostPerYear || 0,
+      ranking: ranking || null,
+      acceptanceRate: acceptanceRate || 50,
+      scholarshipsAvailable: scholarshipsAvailable || false,
+      website: website || null,
+      internationalStudentRatio: internationalStudentRatio || 15,
       shortlistedAt: new Date()
     });
     
@@ -297,7 +319,19 @@ router.delete('/shortlist/:universityId', authMiddleware, async (req, res) => {
 // Lock a live university
 router.post('/lock', authMiddleware, async (req, res) => {
   try {
-    const { universityId, universityName, country } = req.body;
+    const { 
+      universityId, 
+      universityName, 
+      country,
+      city,
+      tuitionFee,
+      livingCostPerYear,
+      ranking,
+      acceptanceRate,
+      scholarshipsAvailable,
+      website,
+      internationalStudentRatio
+    } = req.body;
     
     const user = await User.findById(req.userId);
     
@@ -317,6 +351,14 @@ router.post('/lock', authMiddleware, async (req, res) => {
       universityId, 
       universityName, 
       country,
+      city: city || '',
+      tuitionFee: tuitionFee || 0,
+      livingCostPerYear: livingCostPerYear || 0,
+      ranking: ranking || null,
+      acceptanceRate: acceptanceRate || 50,
+      scholarshipsAvailable: scholarshipsAvailable || false,
+      website: website || null,
+      internationalStudentRatio: internationalStudentRatio || 15,
       lockedAt: new Date()
     });
     
@@ -397,9 +439,42 @@ router.get('/my-selections', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     
+    // Helper function to enrich university data from database if missing
+    const enrichWithDbData = async (uniList) => {
+      return Promise.all((uniList || []).map(async (uni) => {
+        // If tuitionFee is missing, try to fetch from database
+        if (!uni.tuitionFee && !uni.livingCostPerYear) {
+          try {
+            const dbUni = await University.findOne({
+              name: { $regex: new RegExp(uni.universityName, 'i') }
+            });
+            if (dbUni) {
+              return {
+                ...uni.toObject(),
+                city: uni.city || dbUni.city || '',
+                tuitionFee: dbUni.tuitionFee || 0,
+                livingCostPerYear: dbUni.livingCostPerYear || 0,
+                ranking: dbUni.ranking || null,
+                acceptanceRate: dbUni.acceptanceRate || 50,
+                scholarshipsAvailable: dbUni.scholarshipsAvailable || false,
+                website: dbUni.website || null,
+                internationalStudentRatio: dbUni.internationalStudentRatio || 15
+              };
+            }
+          } catch (err) {
+            console.log(`Could not enrich data for ${uni.universityName}`);
+          }
+        }
+        return uni;
+      }));
+    };
+    
+    const shortlisted = await enrichWithDbData(user.liveShortlistedUniversities);
+    const locked = await enrichWithDbData(user.liveLockedUniversities);
+    
     res.json({
-      shortlisted: user.liveShortlistedUniversities || [],
-      locked: user.liveLockedUniversities || []
+      shortlisted,
+      locked
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });

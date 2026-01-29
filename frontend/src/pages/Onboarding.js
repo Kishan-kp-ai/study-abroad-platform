@@ -422,11 +422,17 @@ const Onboarding = () => {
   const handleSkipOnboarding = async () => {
     // Stop any ongoing speech
     synthRef.current.cancel();
-    // Mark onboarding as complete without filling in default data
+    // Save any partial data collected so far along with marking onboarding as complete
     try {
-      const response = await api.post('/user/onboarding', { skipWithDefaults: true });
+      const partialData = {
+        ...collectedDataRef.current,
+        ...extractedData,
+        skipWithDefaults: true
+      };
+      console.log('Skipping with partial data:', partialData);
+      const response = await api.post('/user/onboarding', partialData);
       updateUser(response.data.user);
-      toast.success('Onboarding skipped. You can complete your profile later.');
+      toast.success('Onboarding skipped. Your partial data has been saved.');
       navigate('/dashboard');
     } catch (error) {
       console.error('Skip onboarding error:', error);

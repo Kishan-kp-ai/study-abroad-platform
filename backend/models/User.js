@@ -58,7 +58,15 @@ const userSchema = new mongoose.Schema({
     universityId: { type: String },
     universityName: { type: String },
     country: { type: String },
+    city: { type: String },
     category: { type: String, enum: ['dream', 'target', 'safe'], default: 'target' },
+    tuitionFee: { type: Number },
+    livingCostPerYear: { type: Number },
+    ranking: { type: Number },
+    acceptanceRate: { type: Number },
+    scholarshipsAvailable: { type: Boolean },
+    website: { type: String },
+    internationalStudentRatio: { type: Number },
     shortlistedAt: { type: Date, default: Date.now }
   }],
 
@@ -67,6 +75,14 @@ const userSchema = new mongoose.Schema({
     universityId: { type: String },
     universityName: { type: String },
     country: { type: String },
+    city: { type: String },
+    tuitionFee: { type: Number },
+    livingCostPerYear: { type: Number },
+    ranking: { type: Number },
+    acceptanceRate: { type: Number },
+    scholarshipsAvailable: { type: Boolean },
+    website: { type: String },
+    internationalStudentRatio: { type: Number },
     lockedAt: { type: Date, default: Date.now }
   }],
   

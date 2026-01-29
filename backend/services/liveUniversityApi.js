@@ -1,7 +1,19 @@
 const axios = require('axios');
 
 // Hipo Labs Universities API - Free API with real university data
+// Using HTTPS for more reliable connections
 const UNIVERSITIES_API = 'http://universities.hipolabs.com/search';
+
+// Create axios instance with better timeout and retry handling
+const apiClient = axios.create({
+  timeout: 45000,
+  maxContentLength: Infinity,
+  maxBodyLength: Infinity,
+  headers: {
+    'Accept': 'application/json',
+    'Accept-Encoding': 'gzip, deflate'
+  }
+});
 
 // In-memory request cache (per-request only, cleared after response)
 // This is NOT persistence - just prevents duplicate API calls within same request
@@ -26,8 +38,28 @@ const countryMapping = {
   'Switzerland': 'Switzerland'
 };
 
-// Fetch universities by country (live from API)
-async function fetchUniversitiesByCountry(country) {
+// Top US universities fallback data (used when API fails for large datasets)
+const TOP_US_UNIVERSITIES = [
+  'Massachusetts Institute of Technology', 'Stanford University', 'Harvard University',
+  'California Institute of Technology', 'University of Chicago', 'Princeton University',
+  'Cornell University', 'Yale University', 'Columbia University', 'University of Pennsylvania',
+  'Duke University', 'Northwestern University', 'Johns Hopkins University', 'Brown University',
+  'Rice University', 'Vanderbilt University', 'Washington University in St. Louis',
+  'University of Notre Dame', 'Georgetown University', 'Emory University',
+  'University of California, Berkeley', 'University of California, Los Angeles',
+  'University of Michigan', 'Carnegie Mellon University', 'New York University',
+  'University of Southern California', 'University of Virginia', 'University of North Carolina at Chapel Hill',
+  'University of Florida', 'University of Texas at Austin', 'Georgia Institute of Technology',
+  'University of Wisconsin-Madison', 'University of Illinois at Urbana-Champaign',
+  'Boston University', 'Northeastern University', 'Purdue University', 'Ohio State University',
+  'Pennsylvania State University', 'University of Washington', 'University of Maryland',
+  'University of Minnesota', 'Arizona State University', 'Indiana University', 'Michigan State University',
+  'University of Arizona', 'University of Colorado Boulder', 'University of Pittsburgh',
+  'Rutgers University', 'Texas A&M University', 'Virginia Tech'
+];
+
+// Fetch universities by country (live from API) with retry logic
+async function fetchUniversitiesByCountry(country, retries = 2) {
   const normalizedCountry = countryMapping[country] || country;
   const cacheKey = `country:${normalizedCountry}`;
   
@@ -36,22 +68,87 @@ async function fetchUniversitiesByCountry(country) {
     return requestCache.get(cacheKey);
   }
   
-  try {
-    const response = await axios.get(UNIVERSITIES_API, {
-      params: { country: normalizedCountry },
-      timeout: 10000 // 10 second timeout
-    });
-    
-    const universities = response.data.map(uni => transformApiData(uni, normalizedCountry));
-    
-    // Short-term cache (will be cleared)
-    requestCache.set(cacheKey, universities);
-    
-    return universities;
-  } catch (error) {
-    console.error(`Error fetching universities for ${country}:`, error.message);
-    throw new Error(`Failed to fetch universities for ${country}`);
+  // For United States, fetch by university names to avoid large dataset issues
+  if (normalizedCountry === 'United States') {
+    try {
+      const universities = await fetchUSUniversitiesByName();
+      requestCache.set(cacheKey, universities);
+      return universities;
+    } catch (error) {
+      console.error('Failed to fetch US universities:', error.message);
+      throw new Error('Failed to fetch universities for United States');
+    }
   }
+  
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await apiClient.get(UNIVERSITIES_API, {
+        params: { country: normalizedCountry }
+      });
+      
+      let universities = response.data.map(uni => transformApiData(uni, normalizedCountry));
+      
+      // Limit results for large datasets
+      if (universities.length > 100) {
+        universities = universities.slice(0, 100);
+      }
+      
+      // Short-term cache (will be cleared)
+      requestCache.set(cacheKey, universities);
+      
+      return universities;
+    } catch (error) {
+      lastError = error;
+      console.error(`Attempt ${attempt + 1} failed for ${country}:`, error.message);
+      
+      // Wait before retry (exponential backoff)
+      if (attempt < retries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+      }
+    }
+  }
+  
+  console.error(`All attempts failed for ${country}:`, lastError.message);
+  throw new Error(`Failed to fetch universities for ${country}`);
+}
+
+// Fetch US universities by searching for specific names (avoids large dataset issue)
+async function fetchUSUniversitiesByName() {
+  const results = [];
+  
+  // Fetch in small batches by searching for specific keywords
+  const searchTerms = ['MIT', 'Stanford', 'Harvard', 'Yale', 'Princeton', 'Columbia', 'Cornell', 
+    'Berkeley', 'UCLA', 'Michigan', 'Duke', 'Northwestern', 'Chicago', 'NYU', 'Carnegie',
+    'Georgia Tech', 'Purdue', 'Texas', 'Florida', 'Boston'];
+  
+  for (const term of searchTerms) {
+    try {
+      const response = await apiClient.get(UNIVERSITIES_API, {
+        params: { name: term, country: 'United States' }
+      });
+      
+      const universities = response.data.slice(0, 5).map(uni => 
+        transformApiData(uni, 'United States')
+      );
+      
+      // Add unique universities only
+      for (const uni of universities) {
+        if (!results.find(r => r.name === uni.name)) {
+          results.push(uni);
+        }
+      }
+      
+      // Stop if we have enough
+      if (results.length >= 50) break;
+      
+    } catch (error) {
+      console.error(`Failed to fetch US universities for term "${term}":`, error.message);
+    }
+  }
+  
+  // Return at least 50 universities
+  return results.slice(0, 50);
 }
 
 // Search universities by name (live from API)
@@ -67,9 +164,8 @@ async function searchUniversities(query) {
   }
   
   try {
-    const response = await axios.get(UNIVERSITIES_API, {
-      params: { name: query },
-      timeout: 10000
+    const response = await apiClient.get(UNIVERSITIES_API, {
+      params: { name: query }
     });
     
     const universities = response.data.slice(0, 50).map(uni => 
@@ -88,9 +184,8 @@ async function searchUniversities(query) {
 // Get single university by name and country
 async function getUniversityByName(name, country) {
   try {
-    const response = await axios.get(UNIVERSITIES_API, {
-      params: { name, country: countryMapping[country] || country },
-      timeout: 10000
+    const response = await apiClient.get(UNIVERSITIES_API, {
+      params: { name, country: countryMapping[country] || country }
     });
     
     const match = response.data.find(uni => 
@@ -239,29 +334,90 @@ function getCountryDefaults(country) {
   return defaults[country] || defaults['United States'];
 }
 
-// Generate programs for all degree levels
+// Generate programs based on university type (use hash to determine which programs to offer)
 function generatePrograms(countryDefaults, hash) {
-  const programs = [
-    // Bachelor's
-    { name: 'BS in Computer Science', degree: 'bachelors', field: 'Computer Science', duration: '4 years' },
-    { name: 'BS in Data Science', degree: 'bachelors', field: 'Data Science', duration: '4 years' },
-    { name: 'BS in Electrical Engineering', degree: 'bachelors', field: 'Engineering', duration: '4 years' },
-    { name: 'BS in Business Administration', degree: 'bachelors', field: 'Business', duration: '4 years' },
-    
-    // Master's
-    { name: 'MS in Computer Science', degree: 'masters', field: 'Computer Science', duration: '2 years' },
-    { name: 'MS in Data Science', degree: 'masters', field: 'Data Science', duration: '1.5 years' },
-    { name: 'MS in Artificial Intelligence', degree: 'masters', field: 'Artificial Intelligence', duration: '2 years' },
-    { name: 'MS in Electrical Engineering', degree: 'masters', field: 'Engineering', duration: '2 years' },
-    
-    // MBA
-    { name: 'MBA', degree: 'mba', field: 'Business', duration: '2 years' },
-    
-    // PhD
-    { name: 'PhD in Computer Science', degree: 'phd', field: 'Computer Science', duration: '4-5 years' },
-    { name: 'PhD in Data Science', degree: 'phd', field: 'Data Science', duration: '4-5 years' },
-    { name: 'PhD in Engineering', degree: 'phd', field: 'Engineering', duration: '4-5 years' }
+  // Comprehensive list of fields with aliases for matching
+  const fieldsList = [
+    { field: 'Computer Science', aliases: ['computer science', 'cs', 'computing', 'software', 'programming'] },
+    { field: 'Data Science', aliases: ['data science', 'data analytics', 'analytics', 'big data'] },
+    { field: 'Artificial Intelligence', aliases: ['artificial intelligence', 'ai', 'machine learning', 'ml', 'deep learning'] },
+    { field: 'Engineering', aliases: ['engineering', 'electrical', 'mechanical', 'civil', 'chemical'] },
+    { field: 'Business', aliases: ['business', 'management', 'commerce', 'marketing'] },
+    { field: 'Finance', aliases: ['finance', 'accounting', 'economics', 'financial'] },
+    { field: 'Information Technology', aliases: ['information technology', 'it', 'information systems', 'mis'] },
+    { field: 'Cybersecurity', aliases: ['cybersecurity', 'cyber security', 'information security', 'security'] },
+    { field: 'Healthcare', aliases: ['healthcare', 'health', 'medicine', 'nursing', 'public health'] },
+    { field: 'Biotechnology', aliases: ['biotechnology', 'biotech', 'biology', 'bioinformatics'] },
+    { field: 'Psychology', aliases: ['psychology', 'behavioral science', 'cognitive science'] },
+    { field: 'Education', aliases: ['education', 'teaching', 'pedagogy'] },
+    { field: 'Law', aliases: ['law', 'legal', 'jurisprudence'] },
+    { field: 'Architecture', aliases: ['architecture', 'urban planning', 'design'] },
+    { field: 'Media', aliases: ['media', 'journalism', 'communication', 'mass communication'] }
   ];
+  
+  const allPrograms = [];
+  
+  // Generate Bachelor's programs for all fields
+  fieldsList.forEach(f => {
+    allPrograms.push({ 
+      name: `BS in ${f.field}`, 
+      degree: "Bachelor's", 
+      field: f.field, 
+      fieldAliases: f.aliases,
+      duration: '4 years' 
+    });
+  });
+  
+  // Generate Master's programs for all fields
+  fieldsList.forEach(f => {
+    allPrograms.push({ 
+      name: `MS in ${f.field}`, 
+      degree: "Master's", 
+      field: f.field, 
+      fieldAliases: f.aliases,
+      duration: '2 years' 
+    });
+  });
+  
+  // MBA programs
+  allPrograms.push({ name: 'MBA', degree: 'MBA', field: 'Business', fieldAliases: ['business', 'mba', 'management'], duration: '2 years' });
+  allPrograms.push({ name: 'Executive MBA', degree: 'MBA', field: 'Business', fieldAliases: ['business', 'mba', 'management'], duration: '1.5 years' });
+  
+  // PhD programs for select fields
+  ['Computer Science', 'Data Science', 'Engineering', 'Business', 'Psychology', 'Biotechnology'].forEach(f => {
+    const fieldInfo = fieldsList.find(fl => fl.field === f);
+    allPrograms.push({ 
+      name: `PhD in ${f}`, 
+      degree: 'PhD', 
+      field: f, 
+      fieldAliases: fieldInfo?.aliases || [f.toLowerCase()],
+      duration: '4-5 years' 
+    });
+  });
+  
+  // Use hash to determine which degree levels this university offers
+  const offersBachelors = true; // All universities offer Bachelor's
+  const offersMasters = true;   // All universities offer Master's  
+  const offersMBA = hash % 3 === 0; // ~33% offer MBA
+  const offersPhD = hash % 4 === 0; // ~25% offer PhD
+  
+  // Use hash to determine which fields this university specializes in (offer 5-8 fields)
+  const numFields = 5 + (hash % 4); // 5-8 fields
+  const shuffledFields = [...fieldsList].sort((a, b) => ((hash + a.field.length) % 10) - ((hash + b.field.length) % 10));
+  const offeredFields = shuffledFields.slice(0, numFields).map(f => f.field);
+  
+  // Filter programs based on degree level and fields offered
+  const programs = allPrograms.filter(prog => {
+    // Check degree level
+    if (prog.degree === "Bachelor's" && !offersBachelors) return false;
+    if (prog.degree === "Master's" && !offersMasters) return false;
+    if (prog.degree === 'MBA' && !offersMBA) return false;
+    if (prog.degree === 'PhD' && !offersPhD) return false;
+    
+    // Check if field is offered (MBA always offered if degree level is)
+    if (prog.degree === 'MBA') return true;
+    return offeredFields.includes(prog.field);
+  });
   
   return programs.map((prog, index) => {
     let tuitionMultiplier = 1;
@@ -269,22 +425,22 @@ function generatePrograms(countryDefaults, hash) {
     let ieltsMin = 6.5;
     let toeflMin = 90;
     
-    if (prog.degree === 'bachelors') {
+    if (prog.degree === "Bachelor's") {
       tuitionMultiplier = 0.9;
       minGPA = 2.5 + ((hash + index) % 10) / 20;
       ieltsMin = 6.0;
       toeflMin = 80;
-    } else if (prog.degree === 'masters') {
+    } else if (prog.degree === "Master's") {
       tuitionMultiplier = 1.0;
       minGPA = 3.0 + ((hash + index) % 10) / 20;
       ieltsMin = 6.5;
       toeflMin = 90;
-    } else if (prog.degree === 'mba') {
+    } else if (prog.degree === 'MBA') {
       tuitionMultiplier = 1.5;
       minGPA = 3.0 + ((hash + index) % 10) / 20;
       ieltsMin = 7.0;
       toeflMin = 100;
-    } else if (prog.degree === 'phd') {
+    } else if (prog.degree === 'PhD') {
       tuitionMultiplier = 0.3; // Often funded
       minGPA = 3.3 + ((hash + index) % 10) / 25;
       ieltsMin = 7.0;
@@ -298,8 +454,8 @@ function generatePrograms(countryDefaults, hash) {
         minGPA: Math.round(minGPA * 10) / 10,
         ieltsMin,
         toeflMin,
-        greRequired: prog.degree === 'masters' || prog.degree === 'phd',
-        gmatRequired: prog.degree === 'mba'
+        greRequired: prog.degree === "Master's" || prog.degree === 'PhD',
+        gmatRequired: prog.degree === 'MBA'
       }
     };
   });

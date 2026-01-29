@@ -217,16 +217,16 @@ const CurrencySwitcher = ({ usdAmount }) => {
 };
 
 const COUNTRIES = [
-  'United States',
-  'United Kingdom', 
-  'Canada',
-  'Germany',
   'Australia',
-  'Singapore',
+  'Canada',
+  'France',
+  'Germany',
   'Ireland',
   'Netherlands',
-  'France',
-  'Switzerland'
+  'Singapore',
+  'Switzerland',
+  'United Kingdom',
+  'United States'
 ];
 
 const DEGREE_LEVELS = [
@@ -390,7 +390,21 @@ const LiveUniversities = () => {
         setShortlistedIds(prev => prev.filter(id => id !== uniId));
         toast.success('Removed from shortlist');
       } else {
-        await liveUniversityApi.shortlistUniversity(uniId, uni.name, uni.country);
+        // Send full university details when shortlisting
+        await liveUniversityApi.shortlistUniversity(
+          uniId, 
+          uni.name, 
+          uni.country,
+          'target',
+          uni.city,
+          uni.tuitionFee,
+          uni.livingCostPerYear,
+          uni.ranking,
+          uni.acceptanceRate,
+          uni.scholarshipsAvailable,
+          uni.website,
+          uni.internationalStudentRatio
+        );
         setShortlistedIds(prev => [...prev, uniId]);
         toast.success('Added to shortlist');
       }
@@ -410,7 +424,20 @@ const LiveUniversities = () => {
         setLockedIds(prev => prev.filter(id => id !== uniId));
         toast.success('University unlocked');
       } else {
-        await liveUniversityApi.lockUniversity(uniId, uni.name, uni.country);
+        // Send full university details when locking
+        await liveUniversityApi.lockUniversity(
+          uniId, 
+          uni.name, 
+          uni.country,
+          uni.city,
+          uni.tuitionFee,
+          uni.livingCostPerYear,
+          uni.ranking,
+          uni.acceptanceRate,
+          uni.scholarshipsAvailable,
+          uni.website,
+          uni.internationalStudentRatio
+        );
         setLockedIds(prev => [...prev, uniId]);
         toast.success('University locked');
       }
@@ -880,10 +907,12 @@ const LiveUniversities = () => {
       )}
 
       <div className="universities-grid">
-        {filteredUniversities.map((uni, index) => (
+        {filteredUniversities.map((uni) => {
+          const isExpanded = selectedUniversity?.id === uni.id;
+          return (
           <div 
             key={uni.id} 
-            className={`university-card ${selectedUniversity?.id === uni.id ? 'expanded' : ''}`}
+            className={`university-card ${isExpanded ? 'expanded' : ''}`}
             onClick={() => handleUniversityClick(uni)}
           >
             <div className="card-header">
@@ -928,7 +957,17 @@ const LiveUniversities = () => {
               )}
             </div>
 
-            {/* Cost Section */}
+            {/* Program Section - always visible */}
+            <div className="card-program-section">
+              <h4>Program</h4>
+              <div className="programs-list">
+                <span className="program-tag">
+                  {getUniversityProgram(uni).name}
+                </span>
+              </div>
+            </div>
+
+            {/* Cost Section - always visible */}
             <div className="card-cost-section">
               <div className="cost-main">
                 <span className="cost-label"><FiDollarSign /> Total Cost/Year</span>
@@ -936,42 +975,31 @@ const LiveUniversities = () => {
               </div>
             </div>
 
-            {/* Status Badges */}
-            <div className="card-status-row">
-              <div className="status-item">
-                <span className="status-label"><FiAlertTriangle /> Risk Level</span>
-                <span 
-                  className="status-badge"
-                  style={{ backgroundColor: getRiskLevel(uni).color }}
-                >
-                  {getRiskLevel(uni).label}
-                </span>
+            {/* Expandable Content Wrapper */}
+            <div className={`card-expandable ${isExpanded ? 'expanded' : ''}`}>
+              {/* Status Badges */}
+              <div className="card-status-row">
+                <div className="status-item">
+                  <span className="status-label"><FiAlertTriangle /> Risk Level</span>
+                  <span 
+                    className="status-badge"
+                    style={{ backgroundColor: getRiskLevel(uni).color }}
+                  >
+                    {getRiskLevel(uni).label}
+                  </span>
+                </div>
+                <div className="status-item">
+                  <span className="status-label"><FiTrendingUp /> Acceptance</span>
+                  <span 
+                    className="status-badge"
+                    style={{ backgroundColor: getAcceptanceLikelihood(uni).color }}
+                  >
+                    {getAcceptanceLikelihood(uni).label}
+                  </span>
+                </div>
               </div>
-              <div className="status-item">
-                <span className="status-label"><FiTrendingUp /> Acceptance</span>
-                <span 
-                  className="status-badge"
-                  style={{ backgroundColor: getAcceptanceLikelihood(uni).color }}
-                >
-                  {getAcceptanceLikelihood(uni).label}
-                </span>
-              </div>
-            </div>
 
-            {/* Scholarships & Tap for More */}
-            <div className="card-footer-row">
-              <div className={`scholarship-indicator ${uni.scholarshipsAvailable ? 'available' : 'unavailable'}`}>
-                <FiCheckCircle />
-                <span>{uni.scholarshipsAvailable ? 'Scholarships Available' : 'No Scholarships'}</span>
-              </div>
-              {selectedUniversity?.id !== uni.id && (
-                <button className="tap-more-btn" onClick={() => handleUniversityClick(uni)}>
-                  <FiChevronDown /> Tap for more
-                </button>
-              )}
-            </div>
-
-            {selectedUniversity?.id === uni.id && (
+              {/* Card Details */}
               <div className="card-details">
                 {detailsLoading ? (
                   <div className="details-loading">
@@ -980,55 +1008,64 @@ const LiveUniversities = () => {
                 ) : (
                   <>
                     <div className="detail-section">
-                      <h4>Program</h4>
-                      <div className="programs-list">
-                        <span className="program-tag">
-                          {getUniversityProgram(selectedUniversity).name}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="detail-section">
-                      <h4>Costs</h4>
+                      <h4>Costs Breakdown</h4>
                       <div className="costs-grid">
                         <div>
                           <label>Tuition</label>
-                          <span>${selectedUniversity.tuitionFee?.toLocaleString()}/yr</span>
+                          <span>${uni.tuitionFee?.toLocaleString()}/yr</span>
                         </div>
                         <div>
                           <label>Living</label>
-                          <span>${selectedUniversity.livingCostPerYear?.toLocaleString()}/yr</span>
+                          <span>${uni.livingCostPerYear?.toLocaleString()}/yr</span>
                         </div>
                         <div>
                           <label>App Fee</label>
-                          <span>${selectedUniversity.applicationFee}</span>
+                          <span>${uni.applicationFee}</span>
                         </div>
                       </div>
                     </div>
 
                     <div className="detail-actions">
-                      {!shortlistedIds.includes(selectedUniversity.id) ? (
+                      {!shortlistedIds.includes(uni.id) ? (
                         <button
                           className="detail-action-btn shortlist"
-                          onClick={(e) => toggleShortlist(e, selectedUniversity)}
+                          onClick={(e) => toggleShortlist(e, uni)}
                         >
                           <FiHeart /> Shortlist University
                         </button>
                       ) : (
                         <button
-                          className={`detail-action-btn lock ${lockedIds.includes(selectedUniversity.id) ? 'locked' : ''}`}
-                          onClick={(e) => toggleLock(e, selectedUniversity)}
+                          className={`detail-action-btn lock ${lockedIds.includes(uni.id) ? 'locked' : ''}`}
+                          onClick={(e) => toggleLock(e, uni)}
                         >
-                          {lockedIds.includes(selectedUniversity.id) ? <><FiLock /> Locked</> : <><FiUnlock /> Lock University</>}
+                          {lockedIds.includes(uni.id) ? <><FiLock /> Locked</> : <><FiUnlock /> Lock University</>}
                         </button>
                       )}
                     </div>
                   </>
                 )}
               </div>
-            )}
+            </div>
+
+            {/* Scholarships & Tap for More / Collapse */}
+            <div className="card-footer-row">
+              <div className={`scholarship-indicator ${uni.scholarshipsAvailable ? 'available' : 'unavailable'}`}>
+                <FiCheckCircle />
+                <span>{uni.scholarshipsAvailable ? 'Scholarships Available' : 'No Scholarships'}</span>
+              </div>
+              {!isExpanded ? (
+                <button className="tap-more-btn" onClick={() => handleUniversityClick(uni)}>
+                  <FiChevronDown /> Tap for more
+                </button>
+              ) : (
+                <button className="collapse-btn" onClick={(e) => { e.stopPropagation(); setSelectedUniversity(null); }}>
+                  <FiChevronUp /> Collapse
+                </button>
+              )}
+            </div>
           </div>
-        ))}
+        );
+        })}
       </div>
     </div>
     </ExchangeRateContext.Provider>
