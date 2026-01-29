@@ -523,32 +523,7 @@ const Onboarding = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Extracted Data Preview */}
-        {Object.keys(extractedData).length > 0 && (
-          <div className="extracted-data">
-            <h4>✓ Profile Data Collected:</h4>
-            <div className="data-tags">
-              {extractedData.educationLevel && (
-                <span className="data-tag"><FiCheck /> Education: {extractedData.educationLevel}</span>
-              )}
-              {extractedData.intendedDegree && (
-                <span className="data-tag"><FiCheck /> Goal: {extractedData.intendedDegree}</span>
-              )}
-              {(extractedData.fieldOfStudy || extractedData.major) && (
-                <span className="data-tag"><FiCheck /> Field: {extractedData.fieldOfStudy || extractedData.major}</span>
-              )}
-              {extractedData.preferredCountries?.length > 0 && (
-                <span className="data-tag"><FiCheck /> Countries: {extractedData.preferredCountries.join(', ')}</span>
-              )}
-              {(extractedData.budgetMax || extractedData.budgetMin) && (
-                <span className="data-tag"><FiCheck /> Budget: ${extractedData.budgetMin || 0} - ${extractedData.budgetMax || 0}</span>
-              )}
-              {extractedData.fundingPlan && (
-                <span className="data-tag"><FiCheck /> Funding: {extractedData.fundingPlan}</span>
-              )}
-            </div>
-          </div>
-        )}
+
 
         {/* Voice Controls */}
         <div className="voice-controls">

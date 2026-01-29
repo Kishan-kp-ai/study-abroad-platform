@@ -341,9 +341,6 @@ const ApplicationGuide = () => {
                           <span className="category-badge">
                             {task.category || 'general'}
                           </span>
-                          {task.aiGenerated && (
-                            <span className="ai-badge">AI Generated</span>
-                          )}
                         </div>
                       </div>
                       <button className="task-delete" onClick={() => deleteTask(task._id)}>

@@ -155,16 +155,6 @@ const Profile = () => {
               </select>
             </div>
             <div className="form-group">
-              <label>Degree</label>
-              <input
-                type="text"
-                name="degree"
-                value={formData.degree}
-                onChange={handleChange}
-                disabled={!editing}
-              />
-            </div>
-            <div className="form-group">
               <label>Major</label>
               <input
                 type="text"

@@ -24,7 +24,7 @@ const Layout = ({ children }) => {
   const navItems = [
     { to: '/dashboard', icon: FiHome, label: 'Dashboard' },
     { to: '/counsellor', icon: FiMessageCircle, label: 'AI Counsellor' },
-    { to: '/live-universities', icon: FiGlobe, label: 'Live Search' },
+    { to: '/live-universities', icon: FiGlobe, label: 'Universities' },
     { to: '/shortlisted', icon: FiHeart, label: 'Shortlisted' },
     { to: '/application', icon: FiFileText, label: 'Application' },
     { to: '/profile', icon: FiUser, label: 'Profile' },

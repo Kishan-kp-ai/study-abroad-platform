@@ -147,9 +147,6 @@ const Dashboard = () => {
           <h1>Welcome back, {user?.fullName?.split(' ')[0]}!</h1>
           <p>Here's your study abroad journey at a glance</p>
         </div>
-        <Link to="/counsellor" className="btn btn-primary">
-          <FiMessageCircle /> Talk to AI Counsellor
-        </Link>
       </div>
 
       {/* Stage Indicator */}
@@ -264,9 +261,6 @@ const Dashboard = () => {
               <span>Lock at least one university to start application guidance</span>
             </div>
           )}
-          <Link to="/universities" className="card-link">
-            Explore Universities <FiArrowRight />
-          </Link>
         </div>
 
         {/* Tasks */}
@@ -298,33 +292,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="quick-actions">
-        <h2>Quick Actions</h2>
-        <div className="actions-grid">
-          <Link to="/counsellor" className="action-card">
-            <FiMessageCircle className="action-icon" />
-            <div>
-              <h4>AI Counsellor</h4>
-              <p>Get personalized guidance</p>
-            </div>
-          </Link>
-          <Link to="/universities" className="action-card">
-            <FiBook className="action-icon" />
-            <div>
-              <h4>Explore Universities</h4>
-              <p>Find your perfect match</p>
-            </div>
-          </Link>
-          <Link to="/application" className="action-card">
-            <FiTarget className="action-icon" />
-            <div>
-              <h4>Application Guide</h4>
-              <p>Track your progress</p>
-            </div>
-          </Link>
-        </div>
-      </div>
+
     </div>
   );
 };

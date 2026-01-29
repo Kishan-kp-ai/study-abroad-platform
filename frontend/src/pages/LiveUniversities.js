@@ -849,18 +849,6 @@ const LiveUniversities = () => {
               </select>
             </div>
 
-            <div className="filter-group">
-              <label>Test Requirement</label>
-              <select
-                value={filters.testRequirement}
-                onChange={(e) => setFilters({ ...filters, testRequirement: e.target.value })}
-              >
-                <option value="">Any</option>
-                <option value="gre">GRE Required</option>
-                <option value="gmat">GMAT Required</option>
-                <option value="none">No GRE/GMAT</option>
-              </select>
-            </div>
           </div>
         </div>
       )}
