@@ -966,8 +966,8 @@ router.post('/chat', authMiddleware, async (req, res) => {
     // Initialize Gemini
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    // Use gemini-2.0-flash (latest model)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    // Use gemini-1.5-flash (more stable rate limits than 2.0)
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     
     // Create chat
     const chat = model.startChat({
