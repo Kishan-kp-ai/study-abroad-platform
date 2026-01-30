@@ -185,7 +185,6 @@ const Shortlisted = () => {
       <div className="page-header">
         <div className="header-content">
           <h1><FiHeart /> My Universities</h1>
-          <p>Manage your shortlisted and locked universities</p>
         </div>
         <Link to="/live-universities" className="explore-btn">
           <FiSearch /> Explore More Universities

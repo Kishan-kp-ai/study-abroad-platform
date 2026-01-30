@@ -685,7 +685,6 @@ const LiveUniversities = () => {
       <div className="page-header">
         <div className="header-content">
           <h1><FiGlobe /> Live University Search</h1>
-          <p>Search universities worldwide with real-time data</p>
         </div>
         <div className="live-indicator">
           <FiWifi className="pulse" />

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -8,17 +8,39 @@ import {
   FiHeart,
   FiFileText, 
   FiUser, 
-  FiLogOut 
+  FiLogOut,
+  FiMenu,
+  FiX
 } from 'react-icons/fi';
 import './Layout.css';
+import logo from '../assets/logo.png';
 
 const Layout = ({ children }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+      if (window.innerWidth > 768) {
+        setMenuOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleLogout = () => {
-    logout();
-    navigate('/', { replace: true });
+    if (window.confirm('Are you sure you want to logout?')) {
+      logout();
+      navigate('/', { replace: true });
+    }
+  };
+
+  const handleNavClick = () => {
+    setMenuOpen(false);
   };
 
   const navItems = [
@@ -32,17 +54,29 @@ const Layout = ({ children }) => {
 
   return (
     <div className="layout">
-      <aside className="sidebar">
+      {/* Mobile Menu Toggle */}
+      <button 
+        className="mobile-menu-toggle" 
+        onClick={() => setMenuOpen(!menuOpen)}
+      >
+        {menuOpen ? <FiX size={22} /> : <FiMenu size={22} />}
+      </button>
+
+      <aside className={`sidebar ${menuOpen ? 'menu-open' : ''}`}>
         <div className="sidebar-header">
-          <h1 className="logo">AI Counsellor</h1>
+          <div className="logo">
+            <img src={logo} alt="Logo" className="logo-img" />
+            <span>AI Counsellor</span>
+          </div>
         </div>
         
-        <nav className="sidebar-nav">
+        <nav className={`sidebar-nav ${menuOpen ? 'show' : ''}`}>
           {navItems.map(item => (
             <NavLink 
               key={item.to} 
               to={item.to} 
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              onClick={handleNavClick}
             >
               <item.icon className="nav-icon" />
               <span>{item.label}</span>
@@ -69,6 +103,8 @@ const Layout = ({ children }) => {
           </button>
         </div>
       </aside>
+
+      {menuOpen && <div className="menu-overlay" onClick={() => setMenuOpen(false)} />}
 
       <main className="main-content">
         {children}

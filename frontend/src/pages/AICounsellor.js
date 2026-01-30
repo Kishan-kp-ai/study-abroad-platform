@@ -396,7 +396,6 @@ What would you like to explore today?`;
       <div className="counsellor-header">
         <div className="header-info">
           <h1><FiMessageCircle /> AI Counsellor</h1>
-          <p>Your personal study abroad guide</p>
         </div>
         <div className="header-actions">
           <div className="user-stats">
@@ -623,14 +622,7 @@ What would you like to explore today?`;
       </div>
 
       {/* Floating Tips */}
-      {messages.length <= 2 && (
-        <div className="tips-panel">
-          <div className="tip">
-            <FiAlertCircle className="tip-icon" />
-            <p><strong>Pro tip:</strong> Say "Shortlist Stanford as a dream" to add universities directly!</p>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };

@@ -178,7 +178,6 @@ const ApplicationGuide = () => {
       <div className="page-header">
         <div>
           <h1>Application Guide</h1>
-          <p>Track your application progress with AI-generated tasks</p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowAddTask(true)}>
           <FiPlus /> Add Task

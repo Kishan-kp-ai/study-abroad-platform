@@ -64,22 +64,11 @@ const Profile = () => {
     }
   };
 
-  const getStageLabel = (stage) => {
-    switch(stage) {
-      case 1: return 'Building Profile';
-      case 2: return 'Discovering Universities';
-      case 3: return 'Finalizing Universities';
-      case 4: return 'Preparing Applications';
-      default: return 'Unknown';
-    }
-  };
-
   return (
     <div className="profile-page">
       <div className="page-header">
         <div>
           <h1>Profile Settings</h1>
-          <p>Manage your study abroad profile</p>
         </div>
         {!editing ? (
           <button className="btn btn-outline" onClick={() => setEditing(true)}>
@@ -95,24 +84,6 @@ const Profile = () => {
             </button>
           </div>
         )}
-      </div>
-
-      {/* Current Stage */}
-      <div className="section-card stage-card">
-        <div className="stage-info">
-          <span className="stage-label">Current Stage</span>
-          <span className="stage-value">{getStageLabel(user?.currentStage)}</span>
-        </div>
-        <div className="stage-stats">
-          <div className="mini-stat">
-            <span className="value">{user?.shortlistedUniversities?.length || 0}</span>
-            <span className="label">Shortlisted</span>
-          </div>
-          <div className="mini-stat">
-            <span className="value">{user?.lockedUniversities?.length || 0}</span>
-            <span className="label">Locked</span>
-          </div>
-        </div>
       </div>
 
       <div className="profile-grid">
