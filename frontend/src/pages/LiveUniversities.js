@@ -538,16 +538,10 @@ const LiveUniversities = () => {
           if (assignedProgram.degree !== userDegree) return false;
         }
 
-        // Field of study filter
-        if (user.fieldOfStudy) {
+        // Scholarship filter
+        if (user.fundingPlan === 'scholarship') {
           checksApplied++;
-          const userField = (user.fieldOfStudy || '').toLowerCase();
-          const uniField = (assignedProgram.field || '').toLowerCase();
-          const fieldMatch = uniField.includes(userField) || 
-                            userField.includes(uniField) ||
-                            uniField.split(' ').some(word => word.length > 2 && userField.includes(word)) ||
-                            userField.split(' ').some(word => word.length > 2 && uniField.includes(word));
-          if (!fieldMatch) return false;
+          if (!uni.scholarshipsAvailable) return false;
         }
 
         // If no checks were applied, show all
@@ -791,7 +785,7 @@ const LiveUniversities = () => {
               <>Filtering by: {[
                 user?.budgetMax && `Budget ≤$${user.budgetMax.toLocaleString()}`,
                 user?.intendedDegree && `Degree (${user.intendedDegree})`,
-                user?.fieldOfStudy && `Field (${user.fieldOfStudy})`
+                user?.fundingPlan === 'scholarship' && 'Scholarship Required'
               ].filter(Boolean).join(' • ')}</>
             ) : (
               <>⚠️ No profile data found. Please complete your profile in Settings to use this filter.</>
