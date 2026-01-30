@@ -39,6 +39,28 @@ const Onboarding = () => {
   // Collected data accumulator
   const collectedDataRef = useRef({});
   
+  // Progress tracking - 5 main categories
+  const calculateProgress = () => {
+    const data = extractedData;
+    let completed = 0;
+    const totalSteps = 5;
+    
+    // Step 1: Education Level
+    if (data.educationLevel || data.degree) completed++;
+    // Step 2: Field of Study / Major
+    if (data.fieldOfStudy || data.major || data.intendedDegree) completed++;
+    // Step 3: Preferred Countries
+    if (data.preferredCountries && data.preferredCountries.length > 0) completed++;
+    // Step 4: Budget
+    if (data.budgetMin || data.budgetMax) completed++;
+    // Step 5: Exams Status
+    if (data.ieltsStatus || data.greStatus || data.toeflStatus) completed++;
+    
+    return Math.round((completed / totalSteps) * 100);
+  };
+  
+  const progress = calculateProgress();
+  
   // Ref to hold latest handleUserInput to avoid stale closure
   const handleUserInputRef = useRef(null);
   
@@ -457,7 +479,6 @@ const Onboarding = () => {
         <div className="onboarding-header">
           <div className="header-content">
             <h1>🎓 Onboarding AI</h1>
-            <p>Let's set up your study abroad profile</p>
           </div>
           <div className="header-actions">
             <button 
@@ -476,6 +497,19 @@ const Onboarding = () => {
             </button>
           </div>
         </div>
+        
+        {/* Progress Bar */}
+        {conversationReady && (
+          <div className="onboarding-progress">
+            <div className="progress-bar">
+              <div 
+                className="progress-fill" 
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <span className="progress-text">{progress}% Complete</span>
+          </div>
+        )}
 
         {/* Conversation */}
         <div className="conversation-area">

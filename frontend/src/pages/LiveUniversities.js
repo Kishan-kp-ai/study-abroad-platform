@@ -329,7 +329,40 @@ const LiveUniversities = () => {
 
   useEffect(() => {
     fetchExchangeRates();
+    loadInitialUniversities();
   }, []);
+
+  const loadInitialUniversities = async () => {
+    setLoading(true);
+    try {
+      const countries = ['Australia', 'Canada', 'France', 'Germany', 'Ireland'];
+      const allUniversities = [];
+      
+      for (const country of countries) {
+        try {
+          const result = await liveUniversityApi.getByCountry(country);
+          if (result.data && result.data.length > 0) {
+            allUniversities.push(...result.data.slice(0, 10));
+          }
+        } catch (err) {
+          console.error(`Failed to load universities from ${country}:`, err);
+        }
+      }
+      
+      if (allUniversities.length > 0) {
+        setUniversities(allUniversities);
+        setFetchInfo({
+          source: 'live-api',
+          fetchedAt: new Date().toISOString(),
+          count: allUniversities.length
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load initial universities:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchExchangeRates = async () => {
     try {
