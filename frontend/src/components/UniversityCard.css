@@ -430,3 +430,89 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* Enhanced Mobile Responsive */
+@media (max-width: 480px) {
+  .uni-card {
+    padding: 0.5rem;
+    border-radius: 8px;
+  }
+  
+  .uni-card-header {
+    gap: 0.25rem;
+    margin-bottom: 0.25rem;
+  }
+  
+  .uni-card-header h3 {
+    font-size: 0.75rem;
+  }
+  
+  .uni-card-meta {
+    gap: 0.375rem;
+    margin-bottom: 0.375rem;
+  }
+  
+  .uni-card-meta .location,
+  .uni-card-meta .ranking {
+    font-size: 0.65rem;
+  }
+  
+  .uni-card-cost-section {
+    padding: 0.3rem 0.4rem;
+    margin-bottom: 0.375rem;
+  }
+  
+  .cost-label {
+    font-size: 0.65rem;
+  }
+  
+  .cost-value {
+    font-size: 0.85rem;
+  }
+  
+  .uni-card-status-row {
+    gap: 0.25rem;
+    margin-bottom: 0.375rem;
+  }
+  
+  .status-label {
+    font-size: 0.55rem;
+  }
+  
+  .status-badge {
+    padding: 0.15rem 0.3rem;
+    font-size: 0.6rem;
+  }
+  
+  .uni-card-footer-row {
+    padding-top: 0.25rem;
+  }
+  
+  .scholarship-indicator {
+    font-size: 0.6rem;
+  }
+  
+  .tap-more-btn {
+    padding: 0.2rem 0.375rem;
+    font-size: 0.6rem;
+  }
+  
+  .costs-grid {
+    grid-template-columns: 1fr;
+    gap: 0.375rem;
+  }
+  
+  .detail-section h4 {
+    font-size: 0.6rem;
+  }
+  
+  .program-tag {
+    padding: 0.2rem 0.375rem;
+    font-size: 0.65rem;
+  }
+  
+  .detail-action-btn {
+    padding: 0.4rem;
+    font-size: 0.7rem;
+  }
+}

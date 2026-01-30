@@ -525,4 +525,73 @@
   .mini-stat {
     min-width: 80px;
   }
+  
+  .header-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+  
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .section-card {
+    padding: 1rem;
+  }
+  
+  .section-card h2 {
+    font-size: 1rem;
+  }
+  
+  .country-grid {
+    gap: 0.5rem;
+  }
+  
+  .country-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header h1 {
+    font-size: 1.25rem;
+  }
+  
+  .page-header p {
+    font-size: 0.8rem;
+  }
+  
+  .stage-card {
+    padding: 1.25rem;
+  }
+  
+  .stage-value {
+    font-size: 1.25rem;
+  }
+  
+  .stage-stats {
+    gap: 0.5rem;
+  }
+  
+  .mini-stat {
+    padding: 0.625rem 0.875rem;
+  }
+  
+  .mini-stat .value {
+    font-size: 1.25rem;
+  }
+  
+  .mini-stat .label {
+    font-size: 0.65rem;
+  }
+  
+  .exams-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .exam-item {
+    padding: 0.875rem;
+  }
 }

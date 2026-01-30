@@ -163,3 +163,29 @@ img, svg {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Mobile Responsive - Global */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+  
+  .container {
+    padding: 0 0.75rem;
+  }
+  
+  button:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 0 0.5rem;
+  }
+  
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+}

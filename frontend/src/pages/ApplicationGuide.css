@@ -864,3 +864,75 @@
     gap: 0.5rem;
   }
 }
+
+/* Additional Mobile Enhancements */
+@media (max-width: 768px) {
+  .application-page {
+    padding: 0;
+  }
+  
+  .progress-section {
+    padding: 1rem;
+    border-radius: 12px;
+  }
+  
+  .progress-header {
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
+  
+  .task-card {
+    border-radius: 12px;
+  }
+  
+  .tasks-by-university {
+    gap: 1.25rem;
+  }
+  
+  .university-task-group {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header h1 {
+    font-size: 1.25rem;
+  }
+  
+  .stats-bar {
+    gap: 0.5rem;
+  }
+  
+  .stat-item {
+    min-width: 100%;
+  }
+  
+  .stat-item .stat-value {
+    font-size: 1.25rem;
+  }
+  
+  .stat-item .stat-label {
+    font-size: 0.65rem;
+  }
+  
+  .locked-item {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .locked-info {
+    flex: 1 1 100%;
+    order: 1;
+  }
+  
+  .locked-item .lock-icon {
+    order: 0;
+  }
+  
+  .unlock-btn {
+    order: 2;
+    width: 100%;
+    justify-content: center;
+  }
+}

@@ -316,18 +316,101 @@
 }
 
 /* Responsive adjustments */
+@media (max-width: 768px) {
+  .auth-page {
+    padding: 1.5rem;
+    align-items: flex-start;
+    padding-top: 3rem;
+  }
+  
+  .auth-container {
+    max-width: 100%;
+  }
+  
+  .auth-card {
+    padding: 1.75rem 1.5rem;
+    border-radius: 18px;
+  }
+  
+  .signup-card {
+    padding: 1.25rem;
+  }
+  
+  .auth-header {
+    margin-bottom: 1.5rem;
+  }
+  
+  .auth-logo {
+    font-size: 1.25rem;
+    padding: 0.625rem 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    padding: 0.75rem 0.875rem;
+    font-size: 0.9375rem;
+  }
+  
+  .btn-full {
+    padding: 0.875rem;
+    font-size: 0.9375rem;
+  }
+  
+  .auth-footer {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+  }
+}
+
 @media (max-width: 480px) {
   .auth-page {
     padding: 1rem;
+    padding-top: 2rem;
   }
 
   .auth-card {
-    padding: 2rem 1.5rem;
+    padding: 1.5rem 1.25rem;
     border-radius: 16px;
+  }
+  
+  .signup-card {
+    padding: 1rem;
   }
 
   .auth-header h1 {
-    font-size: 1.5rem;
+    font-size: 1.35rem;
+  }
+  
+  .auth-header p {
+    font-size: 0.875rem;
+  }
+  
+  .auth-logo {
+    font-size: 1.1rem;
+  }
+  
+  .form-group label {
+    font-size: 0.8rem;
+  }
+  
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    padding: 0.7rem 0.75rem;
+    font-size: 0.875rem;
+    border-radius: 8px;
+  }
+  
+  .btn-full {
+    padding: 0.75rem;
+    font-size: 0.875rem;
+    border-radius: 8px;
+  }
+  
+  .auth-footer p {
+    font-size: 0.85rem;
   }
 }
 

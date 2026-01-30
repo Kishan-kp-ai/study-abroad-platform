@@ -897,3 +897,57 @@
     font-size: 1.5rem;
   }
 }
+
+/* Additional Mobile Enhancements */
+@media (max-width: 768px) {
+  .category-breakdown {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  
+  .university-card {
+    padding: 1rem;
+  }
+  
+  .card-header h3 {
+    font-size: 0.95rem;
+  }
+  
+  .card-meta {
+    flex-wrap: wrap;
+  }
+  
+  .search-box input {
+    padding: 0.625rem 0.875rem 0.625rem 2.25rem;
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .shortlisted-page .header-content h1 {
+    font-size: 1.25rem;
+  }
+  
+  .tabs {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  
+  .tab {
+    flex: 1;
+    min-width: calc(50% - 0.25rem);
+    justify-content: center;
+  }
+  
+  .action-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+  }
+  
+  .action-btn.lock-btn,
+  .action-btn.locked,
+  .action-btn.unlock-btn {
+    padding: 0.5rem 1rem;
+    min-width: 80px;
+  }
+}

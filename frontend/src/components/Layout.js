@@ -48,6 +48,10 @@ const Layout = ({ children }) => {
               <span>{item.label}</span>
             </NavLink>
           ))}
+          <button className="nav-item mobile-logout-btn" onClick={handleLogout}>
+            <FiLogOut className="nav-icon" />
+            <span>Logout</span>
+          </button>
         </nav>
 
         <div className="sidebar-footer">
