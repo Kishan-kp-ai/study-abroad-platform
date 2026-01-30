@@ -25,7 +25,7 @@ import {
 import UniversityCard from '../components/UniversityCard';
 import './AICounsellor.css';
 
-const REQUIRED_PROFILE_COMPLETION = 85;
+const REQUIRED_PROFILE_COMPLETION = 70;
 
 const AICounsellor = () => {
   const { user, refreshProfile } = useAuth();
