@@ -251,6 +251,8 @@ const FIXED_PROGRAMS = [
   { name: 'Bachelor of Science (BS) in Business Administration', degree: 'bachelors', field: 'Business' },
   { name: 'Master of Science (MS) in Computer Science', degree: 'masters', field: 'Computer Science' },
   { name: 'Master of Science (MS) in Data Science', degree: 'masters', field: 'Data Science' },
+  { name: 'Master of Business Administration (MBA)', degree: 'mba', field: 'Business' },
+  { name: 'Master of Business Administration (MBA) in Finance', degree: 'mba', field: 'Business' },
   { name: 'Doctor of Philosophy (PhD)', degree: 'phd', field: 'Computer Science' }
 ];
 
